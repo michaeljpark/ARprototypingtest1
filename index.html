@@ -190,15 +190,14 @@
       position: absolute; top: 50%; left: 50%;
       width: 14px; height: 14px;
       margin: -7px 0 0 -7px;
-      border: 2px solid rgba(255,255,255,0.9);
+      border: 1px solid rgba(255,255,255,0.85);
       border-radius: 50%;
       opacity: 0;
       animation: pulseRing 1s linear infinite;
     }
-    .pulse-marker .pulse-ring.d2 { animation-delay: 0.5s; }
     @keyframes pulseRing {
-      0%   { transform: scale(0.4); opacity: 0.9; border-width: 2px; }
-      100% { transform: scale(4.0); opacity: 0;   border-width: 1px; }
+      0%   { transform: scale(0.3); opacity: 0.85; }
+      100% { transform: scale(8);   opacity: 0;    }
     }
   </style>
 </head>
@@ -417,7 +416,7 @@ function init() {
   // White marker with pulsing ripple
   var pulseIcon = L.divIcon({
     className: 'pulse-marker',
-    html: '<span class="pulse-ring"></span><span class="pulse-ring d2"></span><span class="pulse-core"></span>',
+    html: '<span class="pulse-ring"></span><span class="pulse-core"></span>',
     iconSize: [14, 14], iconAnchor: [7, 7]
   });
   var marker = L.marker([DEFAULT_LAT, DEFAULT_LON], { icon: pulseIcon, interactive: false }).addTo(lmap);
