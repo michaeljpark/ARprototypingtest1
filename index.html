@@ -180,7 +180,7 @@
 
 <div id="overlay">
   <h1>SPHERE</h1>
-  <p>주변을 둘러보세요<br>응시하면 포스트가 펼쳐집니다</p>
+  <p>Look around to explore<br>Gaze at a post to expand it</p>
   <button id="start-btn">ENTER</button>
 </div>
 
@@ -263,10 +263,10 @@ document.getElementById('start-btn').addEventListener('click', async function() 
     try {
       var res = await DeviceOrientationEvent.requestPermission();
       if (res !== 'granted') {
-        alert('자이로센서 권한이 필요합니다.\n설정 > Safari > 동작 및 방향 액세스 허용');
+        alert('Motion & orientation access is required.\nSettings > Safari > Motion & Orientation Access');
         return;
       }
-    } catch(e) { alert('권한 오류: ' + e.message); return; }
+    } catch(e) { alert('Permission error: ' + e.message); return; }
   }
   // Camera
   try {
@@ -351,7 +351,7 @@ function init() {
 
   // VIDEO (9:16 portrait)
   var iframe = document.createElement('iframe');
-  iframe.src = 'https://www.youtube.com/embed/2Kw0XdKqJwE?autoplay=1&mute=1&controls=0&loop=1&playlist=2Kw0XdKqJwE&modestbranding=1&playsinline=1&rel=0';
+  iframe.src = 'https://www.youtube.com/embed/2Kw0XdKqJwE?autoplay=1&controls=0&loop=1&playlist=2Kw0XdKqJwE&modestbranding=1&playsinline=1&rel=0';
   iframe.allow = 'autoplay; encrypted-media; picture-in-picture';
   iframe.setAttribute('playsinline', '');
   var VID_W = 200, VID_H = 356;        // 9:16
