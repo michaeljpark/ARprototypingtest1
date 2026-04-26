@@ -223,30 +223,37 @@ var POSTS = [
   "Just one more episode. (lying)"
 ];
 
-// Distribute 22 nodes around the sphere — none in the front band so the map+video sit alone
-var nodes = [];
-var bands = [
-  { lat:  0, count: 6, lonOffset:  60 },   // skip front (lon -60..60 covers panels)
-  { lat: 35, count: 6, lonOffset:  30 },
-  { lat:-35, count: 6, lonOffset:   0 },
-  { lat: 70, count: 1, lonOffset:   0 },
-  { lat:-70, count: 1, lonOffset:   0 },
-  { lat:  0, count: 2, lonOffset: 180 }    // back fillers
-];
-var idx = 0;
-bands.forEach(function(b) {
-  for (var i = 0; i < b.count; i++) {
-    if (idx >= 22) return;
-    nodes.push({
-      id: 'text' + (idx + 1),
-      name: 'text' + (idx + 1),
-      meta: 'your.hz · now',
-      body: POSTS[idx % POSTS.length],
-      lat: b.lat,
-      lon: b.lonOffset + (i * 360 / b.count)
-    });
-    idx++;
-  }
+// 22 cards distributed; front wedge (±90° lon at lat 0) kept clear for map/video panels
+var nodes = [
+  // equator (back hemisphere only)
+  { lat:   0, lon:  90 },
+  { lat:   0, lon: 135 },
+  { lat:   0, lon: 180 },
+  { lat:   0, lon: 225 },
+  { lat:   0, lon: 270 },
+  // upper band
+  { lat:  35, lon:   0 }, { lat: 35, lon:  60 }, { lat: 35, lon: 120 },
+  { lat:  35, lon: 180 }, { lat: 35, lon: 240 }, { lat: 35, lon: 300 },
+  // lower band
+  { lat: -35, lon:  30 }, { lat:-35, lon:  90 }, { lat:-35, lon: 150 },
+  { lat: -35, lon: 210 }, { lat:-35, lon: 270 }, { lat:-35, lon: 330 },
+  // upper-front above panels
+  { lat:  55, lon:   0 },
+  // poles
+  { lat:  78, lon:   0 },
+  { lat: -78, lon:   0 },
+  // back fillers
+  { lat:   0, lon: 200 },
+  { lat: -55, lon: 180 }
+].map(function(n, i) {
+  return {
+    id:   'text' + (i + 1),
+    name: 'text' + (i + 1),
+    meta: 'your.hz · now',
+    body: POSTS[i % POSTS.length],
+    lat:  n.lat,
+    lon:  n.lon
+  };
 });
 
 document.getElementById('start-btn').addEventListener('click', async function() {
@@ -306,7 +313,8 @@ function init() {
     return {
       data: n, el: el,
       worldPos: sphToVec3(R_CARD, n.lat, n.lon),
-      expanded: false
+      expanded: false,
+      leftAt: 0
     };
   });
 
@@ -335,19 +343,19 @@ function init() {
     };
   }
 
-  // MAP (4:3, left of forward view)
+  // MAP (4:3, height matches video)
   var mapHost = document.createElement('div');
   mapHost.id = 'map';
-  var MAP_W = 280, MAP_H = 210; // 4:3
-  var mapPanel = makePanel({ w: MAP_W, h: MAP_H, lat: 0, lon: -16, label: 'MAP', inner: mapHost });
+  var MAP_H = 356, MAP_W = 475;        // 4:3 at h=356
+  var mapPanel = makePanel({ w: MAP_W, h: MAP_H, lat: 0, lon: -28, label: 'MAP', inner: mapHost });
 
-  // VIDEO (9:16 portrait, right of forward view)
+  // VIDEO (9:16 portrait)
   var iframe = document.createElement('iframe');
   iframe.src = 'https://www.youtube.com/embed/2Kw0XdKqJwE?autoplay=1&mute=1&controls=0&loop=1&playlist=2Kw0XdKqJwE&modestbranding=1&playsinline=1&rel=0';
   iframe.allow = 'autoplay; encrypted-media; picture-in-picture';
   iframe.setAttribute('playsinline', '');
-  var VID_W = 200, VID_H = 356; // 9:16
-  var videoPanel = makePanel({ w: VID_W, h: VID_H, lat: 0, lon: 16, label: 'LIVE', inner: iframe });
+  var VID_W = 200, VID_H = 356;        // 9:16
+  var videoPanel = makePanel({ w: VID_W, h: VID_H, lat: 0, lon: 14, label: 'LIVE', inner: iframe });
 
   var panels = [mapPanel, videoPanel];
 
@@ -431,8 +439,8 @@ function init() {
   });
 
   // ── Reticle hover state ────────────────────────────────────────────
-  var HOVER_RADIUS = 70;
-  var HOLD_MS = 1500;
+  var HOLD_MS  = 1500;
+  var CLOSE_MS = 2000;
   var hoverTarget = null, hoverStart = 0;
 
   function startHover(card) {
@@ -487,7 +495,7 @@ function init() {
     }
 
     // Cards
-    var nearest = null, nearestDist = Infinity;
+    var hit = null;
     for (var i = 0; i < cards.length; i++) {
       var c = cards[i];
       var s = projectToScreen(c.worldPos);
@@ -500,18 +508,32 @@ function init() {
       var ty = s.y - (c.expanded ? 30 : 28);
       c.el.style.transform = 'translate3d(' + tx + 'px,' + ty + 'px,0)';
 
-      var dx = s.x - cx, dy = s.y - cy;
-      var d = Math.sqrt(dx*dx + dy*dy);
-      if (d < nearestDist) { nearestDist = d; nearest = c; }
+      // Hit-test: is screen center inside the card's bounding rect?
+      var r = c.el.getBoundingClientRect();
+      var inside = (cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom);
+
+      if (inside) {
+        c.leftAt = 0;
+        if (!hit) hit = c;
+      } else if (c.expanded) {
+        if (!c.leftAt) c.leftAt = performance.now();
+        if (performance.now() - c.leftAt >= CLOSE_MS) {
+          c.expanded = false;
+          c.leftAt = 0;
+          c.el.classList.remove('expanded');
+        }
+      }
     }
 
-    if (nearest && nearestDist < HOVER_RADIUS && !nearest.expanded) {
-      if (hoverTarget !== nearest) {
+    // Hover/loading on the card under the reticle (only if not yet expanded)
+    if (hit && !hit.expanded) {
+      if (hoverTarget !== hit) {
         if (hoverTarget) endHover();
-        startHover(nearest);
+        startHover(hit);
       } else if (performance.now() - hoverStart >= HOLD_MS) {
-        nearest.expanded = true;
-        nearest.el.classList.add('expanded');
+        hit.expanded = true;
+        hit.leftAt = 0;
+        hit.el.classList.add('expanded');
         endHover();
       }
     } else if (hoverTarget) {
