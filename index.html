@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Wall Marquee AR</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro", system-ui, sans-serif;
+      background: #000;
+      color: #fff;
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ==== Intro screen (before AR session) ==== */
+    #intro {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 24px;
+      gap: 20px;
+      background:
+        radial-gradient(ellipse at top, #1a0028 0%, transparent 60%),
+        linear-gradient(180deg, #0a0014 0%, #000 100%);
+      z-index: 10;
+    }
+
+    #intro h1 {
+      font-size: 32px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      background: linear-gradient(90deg, #ff2266, #ff8800);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      text-align: center;
+    }
+
+    #intro .subtitle {
+      font-size: 14px;
+      line-height: 1.6;
+      color: #aaa;
+      text-align: center;
+      max-width: 320px;
+    }
+
+    #marquee-input {
+      width: 100%;
+      max-width: 320px;
+      padding: 14px 16px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 12px;
+      color: #fff;
+      font-size: 15px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    #marquee-input:focus { border-color: #ff2266; }
+
+    #ar-button-container { min-height: 50px; }
+
+    .warning {
+      font-size: 12px;
+      color: #ff8aa8;
+      padding: 12px 16px;
+      border: 1px solid rgba(255, 34, 102, 0.3);
+      border-radius: 10px;
+      background: rgba(255, 34, 102, 0.05);
+      max-width: 320px;
+      line-height: 1.5;
+    }
+
+    /* ==== AR overlay UI (during session, via dom-overlay) ==== */
+    #overlay {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      display: none;
+    }
+    #overlay > * { pointer-events: auto; }
+
+    #status {
+      position: fixed;
+      top: env(safe-area-inset-top, 16px);
+      left: 50%;
+      transform: translateX(-50%);
+      margin-top: 12px;
+      padding: 8px 16px;
+      background: rgba(0, 0, 0, 0.55);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      white-space: nowrap;
+    }
+
+    #controls {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      padding: 16px;
+      padding-bottom: calc(16px + env(safe-area-inset-bottom, 0));
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .ctrl-btn {
+      padding: 11px 16px;
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 999px;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      transition: background 0.15s;
+    }
+    .ctrl-btn:active { background: rgba(255, 255, 255, 0.2); }
+    .ctrl-btn.active {
+      background: linear-gradient(90deg, #ff2266, #ff5500);
+      border-color: transparent;
+    }
+
+    .file-label { display: inline-block; }
+    #video-input { display: none; }
+
+    /* ==== ARButton override ==== */
+    button#ARButton {
+      position: static !important;
+      bottom: auto !important;
+      left: auto !important;
+      transform: none !important;
+      width: auto !important;
+      padding: 14px 32px !important;
+      background: linear-gradient(90deg, #ff2266, #ff8800) !important;
+      border: none !important;
+      border-radius: 999px !important;
+      color: #fff !important;
+      font-size: 16px !important;
+      font-weight: 700 !important;
+      letter-spacing: 0.01em !important;
+      box-shadow: 0 8px 28px rgba(255, 34, 102, 0.4) !important;
+      opacity: 1 !important;
+    }
+  </style>
+</head>
+<body>
+  <!-- Intro -->
+  <div id="intro">
+    <h1>Wall Marquee AR</h1>
+    <p class="subtitle">벽을 비추면 그 면에 마퀴 텍스트나 영상이 흐릅니다.<br>iOS 26+ Safari에서 동작.</p>
+    <input id="marquee-input" type="text" placeholder="마키 텍스트 입력..." value="★ NOW PLAYING ★ BROADWAY LIVE ★ ">
+    <div id="ar-button-container"></div>
+    <div class="warning" id="warning" style="display:none"></div>
+  </div>
+
+  <!-- AR overlay -->
+  <div id="overlay">
+    <div id="status">초기화 중...</div>
+    <div id="controls">
+      <button class="ctrl-btn active" id="mode-text">텍스트</button>
+      <label class="ctrl-btn file-label" for="video-input">비디오 선택</label>
+      <input type="file" id="video-input" accept="video/*">
+      <button class="ctrl-btn" id="speed-btn">속도 0.4</button>
+    </div>
+  </div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { ARButton } from 'three/addons/webxr/ARButton.js';
+
+    // ===== State =====
+    let scene, camera, renderer;
+    let marqueeCanvas, marqueeCtx, marqueeTexture;
+    let videoElement, videoTexture;
+    let currentTexture;
+    let mode = 'text';
+    const speeds = [0.2, 0.4, 0.8, 1.5];
+    let speedIndex = 1;
+    let scrollSpeed = speeds[speedIndex];
+    let marqueeText = '★ NOW PLAYING ★ BROADWAY LIVE ★ ';
+    const planeMeshes = new Map(); // XRPlane -> { mesh, material, lastChangedTime }
+    let totalTime = 0;
+
+    // ===== Shader: per-mesh UV offset/repeat for synchronized scroll =====
+    const vertexShader = /* glsl */`
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `;
+
+    const fragmentShader = /* glsl */`
+      uniform sampler2D map;
+      uniform float uOffset;
+      uniform float uRepeatX;
+      varying vec2 vUv;
+      void main() {
+        vec2 uv = vec2(vUv.x * uRepeatX + uOffset, vUv.y);
+        gl_FragColor = texture2D(map, uv);
+      }
+    `;
+
+    // ===== Marquee canvas texture =====
+    function setupMarqueeCanvas() {
+      marqueeCanvas = document.createElement('canvas');
+      marqueeCanvas.width = 2048;
+      marqueeCanvas.height = 256;
+      marqueeCtx = marqueeCanvas.getContext('2d');
+      marqueeTexture = new THREE.CanvasTexture(marqueeCanvas);
+      marqueeTexture.wrapS = THREE.RepeatWrapping;
+      marqueeTexture.wrapT = THREE.ClampToEdgeWrapping;
+      marqueeTexture.minFilter = THREE.LinearFilter;
+      marqueeTexture.magFilter = THREE.LinearFilter;
+      marqueeTexture.anisotropy = 4;
+      drawMarqueeText(marqueeText);
+    }
+
+    function drawMarqueeText(text) {
+      const ctx = marqueeCtx;
+      const W = marqueeCanvas.width;
+      const H = marqueeCanvas.height;
+
+      ctx.fillStyle = '#0a0014';
+      ctx.fillRect(0, 0, W, H);
+
+      // Subtle scanline accent
+      ctx.fillStyle = 'rgba(255, 34, 102, 0.06)';
+      for (let y = 0; y < H; y += 4) ctx.fillRect(0, y, W, 1);
+
+      // Glowing text, tiled to seam-tile across the canvas
+      ctx.shadowColor = '#ff0066';
+      ctx.shadowBlur = 28;
+      ctx.fillStyle = '#ff3a7a';
+      ctx.font = 'bold 140px -apple-system, Helvetica, sans-serif';
+      ctx.textBaseline = 'middle';
+
+      const measure = ctx.measureText(text);
+      const textWidth = Math.max(measure.width, 1);
+      const tiles = Math.ceil(W / textWidth) + 1;
+      for (let i = 0; i < tiles; i++) {
+        ctx.fillText(text, i * textWidth, H / 2);
+      }
+      ctx.shadowBlur = 0;
+
+      if (marqueeTexture) marqueeTexture.needsUpdate = true;
+    }
+
+    // ===== Video texture =====
+    function setupVideo(file) {
+      if (!videoElement) {
+        videoElement = document.createElement('video');
+        videoElement.crossOrigin = 'anonymous';
+        videoElement.loop = true;
+        videoElement.muted = true;
+        videoElement.playsInline = true;
+        videoElement.setAttribute('webkit-playsinline', '');
+      }
+      const url = URL.createObjectURL(file);
+      videoElement.src = url;
+      videoElement.play().catch(e => console.warn('video play:', e));
+
+      if (videoTexture) videoTexture.dispose();
+      videoTexture = new THREE.VideoTexture(videoElement);
+      videoTexture.wrapS = THREE.RepeatWrapping;
+      videoTexture.wrapT = THREE.ClampToEdgeWrapping;
+      videoTexture.minFilter = THREE.LinearFilter;
+      videoTexture.magFilter = THREE.LinearFilter;
+
+      setMode('video');
+    }
+
+    function setMode(newMode) {
+      mode = newMode;
+      currentTexture = (mode === 'video' && videoTexture) ? videoTexture : marqueeTexture;
+      for (const entry of planeMeshes.values()) {
+        entry.material.uniforms.map.value = currentTexture;
+      }
+      document.getElementById('mode-text').classList.toggle('active', mode === 'text');
+    }
+
+    // ===== Build mesh from XRPlane polygon =====
+    // WebXR planes: polygon is in plane.planeSpace's XZ plane, Y is the normal.
+    // For vertical walls: local X is horizontal on the wall, local Z is up/down.
+    function buildPlaneMesh(plane) {
+      const polygon = plane.polygon;
+      if (!polygon || polygon.length < 3) return null;
+
+      let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+      for (const p of polygon) {
+        if (p.x < minX) minX = p.x;
+        if (p.x > maxX) maxX = p.x;
+        if (p.z < minZ) minZ = p.z;
+        if (p.z > maxZ) maxZ = p.z;
+      }
+      const width = maxX - minX;
+      const height = maxZ - minZ;
+      if (width < 0.05 || height < 0.05) return null;
+
+      // Triangle fan (assumes convex polygon — WebXR typically returns convex)
+      const positions = [];
+      const uvs = [];
+      const indices = [];
+      for (let i = 0; i < polygon.length; i++) {
+        const p = polygon[i];
+        positions.push(p.x, 0, p.z);
+        uvs.push((p.x - minX) / width, (p.z - minZ) / height);
+      }
+      for (let i = 1; i < polygon.length - 1; i++) {
+        indices.push(0, i, i + 1);
+      }
+
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+      geometry.setIndex(indices);
+      geometry.computeVertexNormals();
+
+      // Texture density: 1 full marquee tile per ~2.5m of wall length
+      const tileLength = 2.5;
+      const repeatX = Math.max(width / tileLength, 0.1);
+
+      const material = new THREE.ShaderMaterial({
+        uniforms: {
+          map: { value: currentTexture || marqueeTexture },
+          uOffset: { value: 0 },
+          uRepeatX: { value: repeatX }
+        },
+        vertexShader,
+        fragmentShader,
+        side: THREE.DoubleSide,
+        transparent: false
+      });
+
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.frustumCulled = false;
+      mesh.userData = { width, height };
+
+      return { mesh, material };
+    }
+
+    // ===== Render loop =====
+    function render(time, frame) {
+      totalTime = (time || 0) / 1000;
+
+      if (frame) {
+        const refSpace = renderer.xr.getReferenceSpace();
+        const detected = frame.detectedPlanes;
+
+        if (detected) {
+          // Drop disappeared planes
+          for (const [plane, entry] of planeMeshes) {
+            if (!detected.has(plane)) {
+              scene.remove(entry.mesh);
+              entry.mesh.geometry.dispose();
+              entry.material.dispose();
+              planeMeshes.delete(plane);
+            }
+          }
+
+          let verticalCount = 0;
+          for (const plane of detected) {
+            if (plane.orientation !== 'vertical') continue;
+            verticalCount++;
+
+            const pose = frame.getPose(plane.planeSpace, refSpace);
+            if (!pose) continue;
+
+            let entry = planeMeshes.get(plane);
+            if (!entry || entry.lastChangedTime !== plane.lastChangedTime) {
+              if (entry) {
+                scene.remove(entry.mesh);
+                entry.mesh.geometry.dispose();
+                entry.material.dispose();
+              }
+              const built = buildPlaneMesh(plane);
+              if (!built) continue;
+              scene.add(built.mesh);
+              entry = {
+                mesh: built.mesh,
+                material: built.material,
+                lastChangedTime: plane.lastChangedTime
+              };
+              planeMeshes.set(plane, entry);
+            }
+
+            // Apply pose
+            const m = entry.mesh;
+            m.matrixAutoUpdate = false;
+            m.matrix.fromArray(pose.transform.matrix);
+            m.updateMatrixWorld(true);
+
+            // Synchronized scroll: same time-based offset on every wall.
+            // Divided by tileLength to keep speed in meters/second.
+            entry.material.uniforms.uOffset.value = -totalTime * scrollSpeed / 2.5;
+          }
+
+          updateStatus(verticalCount === 0
+            ? '벽을 천천히 비춰보세요...'
+            : `벽 ${verticalCount}개 감지됨`);
+        }
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    function updateStatus(text) {
+      const el = document.getElementById('status');
+      if (el) el.textContent = text;
+    }
+
+    // ===== Compatibility check =====
+    async function checkSupport(button) {
+      const warning = document.getElementById('warning');
+      if (!navigator.xr) {
+        warning.textContent = 'WebXR이 지원되지 않습니다. iOS 26+ Safari 또는 WebXR 지원 브라우저가 필요합니다. (HTTPS 필수)';
+        warning.style.display = 'block';
+        return false;
+      }
+      try {
+        const ok = await navigator.xr.isSessionSupported('immersive-ar');
+        if (!ok) {
+          warning.textContent = 'immersive-ar 세션이 지원되지 않습니다.';
+          warning.style.display = 'block';
+          return false;
+        }
+      } catch (e) {
+        warning.textContent = `지원 확인 실패: ${e.message}`;
+        warning.style.display = 'block';
+        return false;
+      }
+      return true;
+    }
+
+    // ===== Init =====
+    async function init() {
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 50);
+
+      renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+      renderer.setPixelRatio(window.devicePixelRatio);
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.xr.enabled = true;
+      document.body.appendChild(renderer.domElement);
+
+      setupMarqueeCanvas();
+      currentTexture = marqueeTexture;
+
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+
+      const overlay = document.getElementById('overlay');
+      const button = ARButton.createButton(renderer, {
+        requiredFeatures: ['plane-detection'],
+        optionalFeatures: ['depth-sensing', 'dom-overlay'],
+        depthSensing: {
+          usagePreference: ['gpu-optimized', 'cpu-optimized'],
+          dataFormatPreference: ['luminance-alpha', 'float32']
+        },
+        domOverlay: { root: overlay }
+      });
+      button.id = 'ARButton';
+      document.getElementById('ar-button-container').appendChild(button);
+
+      await checkSupport(button);
+
+      // Session lifecycle
+      renderer.xr.addEventListener('sessionstart', () => {
+        document.getElementById('intro').style.display = 'none';
+        overlay.style.display = 'block';
+        const input = document.getElementById('marquee-input');
+        if (input.value.trim()) {
+          marqueeText = input.value.trim() + ' ';
+          drawMarqueeText(marqueeText);
+        }
+      });
+
+      renderer.xr.addEventListener('sessionend', () => {
+        document.getElementById('intro').style.display = 'flex';
+        overlay.style.display = 'none';
+        for (const entry of planeMeshes.values()) {
+          scene.remove(entry.mesh);
+          entry.mesh.geometry.dispose();
+          entry.material.dispose();
+        }
+        planeMeshes.clear();
+      });
+
+      // Controls
+      document.getElementById('mode-text').addEventListener('click', () => setMode('text'));
+
+      document.getElementById('video-input').addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) setupVideo(file);
+      });
+
+      const speedBtn = document.getElementById('speed-btn');
+      speedBtn.addEventListener('click', () => {
+        speedIndex = (speedIndex + 1) % speeds.length;
+        scrollSpeed = speeds[speedIndex];
+        speedBtn.textContent = `속도 ${scrollSpeed}`;
+      });
+
+      document.getElementById('marquee-input').addEventListener('input', (e) => {
+        marqueeText = (e.target.value || ' ') + ' ';
+        drawMarqueeText(marqueeText);
+      });
+
+      renderer.setAnimationLoop(render);
+    }
+
+    init();
+  </script>
+</body>
+</html>
