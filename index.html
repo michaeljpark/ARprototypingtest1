@@ -7,63 +7,40 @@
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { overflow: hidden; background: #000; font-family: 'Courier New', monospace; }
-    #bg {
-      position: fixed; inset: 0;
-      width: 100%; height: 100%;
-      object-fit: cover; z-index: 0;
-    }
-    #canvas {
-      position: fixed; inset: 0;
-      width: 100%; height: 100%;
-      z-index: 1; touch-action: none;
-    }
+    #bg { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
+    #canvas { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 1; touch-action: none; }
     #overlay {
       position: fixed; inset: 0;
       background: linear-gradient(135deg, rgba(0,8,12,0.96) 0%, rgba(0,20,28,0.96) 100%);
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
       gap: 20px; z-index: 20;
     }
-    #overlay h1 {
-      color: #00ffcc; font-size: 26px;
-      letter-spacing: 8px;
-      text-shadow: 0 0 24px rgba(0,255,204,0.45);
-    }
-    #overlay p {
-      color: rgba(0,255,204,0.55); font-size: 13px;
-      text-align: center; max-width: 256px; line-height: 1.9;
-    }
+    #overlay h1 { color: #00ffcc; font-size: 26px; letter-spacing: 8px; text-shadow: 0 0 24px rgba(0,255,204,0.45); }
+    #overlay p { color: rgba(0,255,204,0.55); font-size: 13px; text-align: center; max-width: 256px; line-height: 1.9; }
     #start-btn {
       margin-top: 8px; padding: 13px 44px;
-      background: transparent;
-      color: #00ffcc; border: 1.5px solid rgba(0,255,204,0.7);
-      border-radius: 2px; font-size: 14px;
-      font-family: inherit; letter-spacing: 4px; cursor: pointer;
+      background: transparent; color: #00ffcc;
+      border: 1.5px solid rgba(0,255,204,0.7); border-radius: 2px;
+      font-size: 14px; font-family: inherit; letter-spacing: 4px; cursor: pointer;
       box-shadow: 0 0 18px rgba(0,255,204,0.15);
-      transition: box-shadow 0.2s, background 0.2s;
     }
-    #start-btn:active {
-      background: rgba(0,255,204,0.12);
-      box-shadow: 0 0 32px rgba(0,255,204,0.35);
-    }
+    #start-btn:active { background: rgba(0,255,204,0.12); box-shadow: 0 0 32px rgba(0,255,204,0.35); }
+
     #hud {
-      display: none;
-      position: fixed; bottom: 22px; left: 50%;
+      display: none; position: fixed; bottom: 22px; left: 50%;
       transform: translateX(-50%);
-      color: rgba(0,255,204,0.35); font-size: 10px;
-      letter-spacing: 2px; z-index: 10;
-      pointer-events: none; text-align: center; white-space: nowrap;
+      color: rgba(0,255,204,0.35); font-size: 10px; letter-spacing: 2px;
+      z-index: 10; pointer-events: none; text-align: center; white-space: nowrap;
     }
-    #crosshair {
-      display: none;
-      position: fixed; top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      width: 18px; height: 18px;
-      z-index: 10; pointer-events: none;
+    #debug {
+      display: none; position: fixed; top: 12px; left: 12px;
+      color: #00ffcc; font-size: 11px; line-height: 1.5;
+      background: rgba(0,14,14,0.7); padding: 8px 12px;
+      border: 1px solid rgba(0,255,204,0.4); border-radius: 4px;
+      z-index: 10; pointer-events: none; min-width: 180px;
     }
-    #crosshair::before, #crosshair::after {
-      content: ''; position: absolute; background: rgba(0,255,204,0.45);
-    }
+    #crosshair { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 18px; height: 18px; z-index: 10; pointer-events: none; }
+    #crosshair::before, #crosshair::after { content:''; position:absolute; background: rgba(0,255,204,0.45); }
     #crosshair::before { top: 50%; left: 0; width: 100%; height: 1px; transform: translateY(-50%); }
     #crosshair::after  { top: 0; left: 50%; height: 100%; width: 1px; transform: translateX(-50%); }
   </style>
@@ -80,12 +57,13 @@
 </div>
 
 <div id="hud">SPHERICAL GRID &nbsp;&middot;&nbsp; GYRO TRACKING</div>
+<div id="debug">GYRO: waiting...</div>
 <div id="crosshair"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.153.0/build/three.min.js"></script>
 <script>
 function sphToVec3(r, lat, lon) {
-  var phi   = THREE.MathUtils.degToRad(90 - lat);
+  var phi = THREE.MathUtils.degToRad(90 - lat);
   var theta = THREE.MathUtils.degToRad(lon);
   return new THREE.Vector3(
     r * Math.sin(phi) * Math.cos(theta),
@@ -112,21 +90,17 @@ function makeLabel(text) {
   var c = document.createElement('canvas');
   c.width = W; c.height = H;
   var ctx = c.getContext('2d');
-
   ctx.fillStyle = 'rgba(0,14,14,0.82)';
   rrect(ctx, 3, 3, W-6, H-6, 9);
   ctx.fill();
-
   ctx.strokeStyle = 'rgba(0,255,204,0.9)';
   ctx.lineWidth = 1.5;
   ctx.stroke();
-
   ctx.font = "bold 26px 'Courier New', monospace";
   ctx.fillStyle = '#00ffcc';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(text, W/2, H/2);
-
   var tex = new THREE.CanvasTexture(c);
   var mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
   var sprite = new THREE.Sprite(mat);
@@ -134,31 +108,47 @@ function makeLabel(text) {
   return sprite;
 }
 
+var dbg = document.getElementById('debug');
+function setDbg(msg) { dbg.innerText = msg; }
+
 document.getElementById('start-btn').addEventListener('click', async function() {
+  // Camera
   try {
     var stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: 'environment', width: { ideal: 1280 } },
       audio: false
     });
     document.getElementById('bg').srcObject = stream;
-  } catch(e) { console.warn('Camera unavailable:', e); }
+  } catch(e) {
+    alert('카메라 오류: ' + e.message);
+  }
 
+  // iOS gyro permission (requires user gesture)
   if (typeof DeviceOrientationEvent !== 'undefined' &&
       typeof DeviceOrientationEvent.requestPermission === 'function') {
     try {
       var res = await DeviceOrientationEvent.requestPermission();
-      if (res !== 'granted') alert('자이로센서 권한이 필요합니다.');
-    } catch(e) { console.warn(e); }
+      setDbg('GYRO permission: ' + res);
+      if (res !== 'granted') {
+        alert('자이로센서 권한이 거부되었습니다. Safari 설정 > 웹사이트 > 동작 및 방향 > 허용');
+        return;
+      }
+    } catch(e) {
+      alert('자이로 권한 요청 실패: ' + e.message);
+    }
+  } else {
+    setDbg('GYRO: no permission API');
   }
 
   document.getElementById('overlay').style.display  = 'none';
   document.getElementById('hud').style.display       = 'block';
+  document.getElementById('debug').style.display     = 'block';
   document.getElementById('crosshair').style.display = 'block';
   init();
 });
 
 function init() {
-  var canvas   = document.getElementById('canvas');
+  var canvas = document.getElementById('canvas');
   var renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(innerWidth, innerHeight);
@@ -170,7 +160,6 @@ function init() {
 
   var R = 10;
 
-  // Sphere wireframe (inside view)
   var sGeo = new THREE.SphereGeometry(R, 24, 16);
   var sMat = new THREE.MeshBasicMaterial({
     color: 0x00ffcc, wireframe: true,
@@ -178,12 +167,10 @@ function init() {
   });
   scene.add(new THREE.Mesh(sGeo, sMat));
 
-  // Equator ring
   var equatorMat = new THREE.MeshBasicMaterial({ color: 0x00ffcc, transparent: true, opacity: 0.4 });
   var equator = new THREE.Mesh(new THREE.TorusGeometry(R, 0.025, 8, 120), equatorMat);
   scene.add(equator);
 
-  // 4 meridian rings
   for (var i = 0; i < 4; i++) {
     var m = new THREE.Mesh(
       new THREE.TorusGeometry(R, 0.012, 8, 120),
@@ -194,7 +181,6 @@ function init() {
     scene.add(m);
   }
 
-  // Label nodes distributed on sphere
   var nodes = [
     { label: 'text1',  lat:  0,  lon:   0 },
     { label: 'text2',  lat:  0,  lon:  45 },
@@ -233,27 +219,48 @@ function init() {
     scene.add(sprite);
   });
 
-  // Gyroscope
-  var _q1 = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5));
-  var _q0 = new THREE.Quaternion();
-  var _eu = new THREE.Euler();
+  // ── Gyroscope (proper Three.js DeviceOrientationControls math) ──────────
+  var zee = new THREE.Vector3(0, 0, 1);
+  var q1  = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5)); // -PI/2 around X
+  var q0  = new THREE.Quaternion();
+  var euler = new THREE.Euler();
   var gyroActive = false;
+  var lastAlpha = null;
 
-  window.addEventListener('deviceorientation', function(e) {
-    if (e.alpha === null) return;
+  function setCameraQuat(alpha, beta, gamma, orient) {
+    euler.set(beta, alpha, -gamma, 'YXZ');
+    camera.quaternion.setFromEuler(euler);
+    camera.quaternion.multiply(q1);
+    camera.quaternion.multiply(q0.setFromAxisAngle(zee, -orient));
+  }
+
+  function onOrientation(e) {
+    if (e.alpha === null || e.alpha === undefined) {
+      setDbg('GYRO: alpha=null');
+      return;
+    }
     gyroActive = true;
     var a = THREE.MathUtils.degToRad(e.alpha);
     var b = THREE.MathUtils.degToRad(e.beta);
     var g = THREE.MathUtils.degToRad(e.gamma);
-    var orient = THREE.MathUtils.degToRad((screen.orientation && screen.orientation.angle) || 0);
-    _eu.set(b, a, -g, 'YXZ');
-    camera.quaternion.setFromEuler(_eu);
-    camera.quaternion.multiply(_q1);
-    _q0.setFromAxisAngle(new THREE.Vector3(0, 0, 1), -orient);
-    camera.quaternion.premultiply(_q0);
-  }, true);
+    var o = THREE.MathUtils.degToRad((screen.orientation && screen.orientation.angle) || window.orientation || 0);
+    setCameraQuat(a, b, g, o);
+    lastAlpha = e.alpha;
+    setDbg(
+      'GYRO ON\n' +
+      'a: ' + e.alpha.toFixed(1) + '\n' +
+      'b: ' + e.beta.toFixed(1) + '\n' +
+      'g: ' + e.gamma.toFixed(1)
+    );
+  }
 
-  // Touch/mouse drag fallback
+  // Try absolute first (more stable on iOS), fallback to regular
+  if ('ondeviceorientationabsolute' in window) {
+    window.addEventListener('deviceorientationabsolute', onOrientation, true);
+  }
+  window.addEventListener('deviceorientation', onOrientation, true);
+
+  // Drag fallback (desktop / no gyro)
   var dragging = false, px = 0, py = 0, yaw = 0, pitch = 0;
   canvas.addEventListener('pointerdown', function(e) { dragging = true; px = e.clientX; py = e.clientY; });
   window.addEventListener('pointerup',   function()  { dragging = false; });
@@ -273,6 +280,13 @@ function init() {
     camera.updateProjectionMatrix();
     renderer.setSize(innerWidth, innerHeight);
   });
+
+  // After 2s if no gyro events, alert user
+  setTimeout(function() {
+    if (!gyroActive) {
+      setDbg('GYRO: no events received\n드래그로 둘러보세요');
+    }
+  }, 2000);
 
   var clock = new THREE.Clock();
   (function animate() {
