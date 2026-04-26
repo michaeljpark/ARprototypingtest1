@@ -85,7 +85,7 @@
       backdrop-filter: blur(22px) saturate(140%);
       -webkit-backdrop-filter: blur(22px) saturate(140%);
       border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 999px;
+      border-radius: 22px;
       padding: 10px 18px 10px 10px;
       display: flex; align-items: center; gap: 12px;
       will-change: transform, opacity;
@@ -121,7 +121,7 @@
                   margin-top 0.5s cubic-bezier(.2,.7,.2,1);
     }
     .card.expanded {
-      width: 320px; border-radius: 22px;
+      width: 320px; border-radius: 14px;
       padding: 16px 20px 18px 16px;
       display: grid; grid-template-columns: 44px 1fr; gap: 0 12px;
       align-items: start;
@@ -188,12 +188,13 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 function sphToVec3(r, lat, lon) {
+  // lon = 0 means directly in front of the default camera (-Z)
   var phi   = THREE.MathUtils.degToRad(90 - lat);
   var theta = THREE.MathUtils.degToRad(lon);
   return new THREE.Vector3(
-    r * Math.sin(phi) * Math.cos(theta),
-    r * Math.cos(phi),
-    r * Math.sin(phi) * Math.sin(theta)
+     r * Math.sin(phi) * Math.sin(theta),
+     r * Math.cos(phi),
+    -r * Math.sin(phi) * Math.cos(theta)
   );
 }
 
@@ -337,16 +338,16 @@ function init() {
   // MAP (4:3, left of forward view)
   var mapHost = document.createElement('div');
   mapHost.id = 'map';
-  var MAP_W = 320, MAP_H = 240; // 4:3
-  var mapPanel = makePanel({ w: MAP_W, h: MAP_H, lat: 0, lon: -22, label: 'MAP', inner: mapHost });
+  var MAP_W = 280, MAP_H = 210; // 4:3
+  var mapPanel = makePanel({ w: MAP_W, h: MAP_H, lat: 0, lon: -16, label: 'MAP', inner: mapHost });
 
-  // VIDEO (16:9, right of forward view)
+  // VIDEO (9:16 portrait, right of forward view)
   var iframe = document.createElement('iframe');
   iframe.src = 'https://www.youtube.com/embed/2Kw0XdKqJwE?autoplay=1&mute=1&controls=0&loop=1&playlist=2Kw0XdKqJwE&modestbranding=1&playsinline=1&rel=0';
   iframe.allow = 'autoplay; encrypted-media; picture-in-picture';
   iframe.setAttribute('playsinline', '');
-  var VID_W = 426, VID_H = 240; // 16:9 matching map height
-  var videoPanel = makePanel({ w: VID_W, h: VID_H, lat: 0, lon: 22, label: 'LIVE', inner: iframe });
+  var VID_W = 200, VID_H = 356; // 9:16
+  var videoPanel = makePanel({ w: VID_W, h: VID_H, lat: 0, lon: 16, label: 'LIVE', inner: iframe });
 
   var panels = [mapPanel, videoPanel];
 
