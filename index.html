@@ -190,14 +190,15 @@
       position: absolute; top: 50%; left: 50%;
       width: 14px; height: 14px;
       margin: -7px 0 0 -7px;
-      border: 1px solid rgba(255,255,255,0.85);
+      border: 0.5px solid rgba(255,255,255,0.9);
       border-radius: 50%;
       opacity: 0;
-      animation: pulseRing 1s linear infinite;
+      animation: pulseRing 2s linear infinite;
+      will-change: transform, opacity;
     }
     @keyframes pulseRing {
-      0%   { transform: scale(0.3); opacity: 0.85; }
-      100% { transform: scale(8);   opacity: 0;    }
+      0%   { transform: scale(0.3); opacity: 0.9; }
+      100% { transform: scale(16);  opacity: 0;   }
     }
   </style>
 </head>
