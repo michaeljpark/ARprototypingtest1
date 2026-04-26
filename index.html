@@ -111,8 +111,40 @@ function makeLabel(text) {
 var dbg = document.getElementById('debug');
 function setDbg(msg) { dbg.innerText = msg; }
 
-document.getElementById('start-btn').addEventListener('click', async function() {
-  // Camera
+var startBtn = document.getElementById('start-btn');
+var overlayP = document.querySelector('#overlay p');
+var overlayH = document.querySelector('#overlay h1');
+var step = 1;
+
+// STEP 1: 자이로 권한 (반드시 사용자 제스처 안에서 첫 호출)
+startBtn.addEventListener('click', async function handler() {
+  if (step === 1) {
+    if (typeof DeviceOrientationEvent !== 'undefined' &&
+        typeof DeviceOrientationEvent.requestPermission === 'function') {
+      try {
+        var res = await DeviceOrientationEvent.requestPermission();
+        setDbg('GYRO permission: ' + res);
+        if (res !== 'granted') {
+          alert('자이로센서 권한이 거부되었습니다.\nSafari 설정 > 동작 및 방향 액세스 > 허용');
+          return;
+        }
+      } catch(e) {
+        alert('자이로 권한 요청 실패: ' + e.message);
+        return;
+      }
+    } else {
+      setDbg('GYRO: no permission API (non-iOS)');
+    }
+
+    // STEP 2 UI로 전환
+    step = 2;
+    overlayH.textContent = 'CAMERA';
+    overlayP.innerHTML = '자이로 활성화 완료<br><br>다음으로 카메라를 시작합니다';
+    startBtn.textContent = 'START';
+    return;
+  }
+
+  // STEP 2: 카메라
   try {
     var stream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: 'environment', width: { ideal: 1280 } },
@@ -121,23 +153,6 @@ document.getElementById('start-btn').addEventListener('click', async function() 
     document.getElementById('bg').srcObject = stream;
   } catch(e) {
     alert('카메라 오류: ' + e.message);
-  }
-
-  // iOS gyro permission (requires user gesture)
-  if (typeof DeviceOrientationEvent !== 'undefined' &&
-      typeof DeviceOrientationEvent.requestPermission === 'function') {
-    try {
-      var res = await DeviceOrientationEvent.requestPermission();
-      setDbg('GYRO permission: ' + res);
-      if (res !== 'granted') {
-        alert('자이로센서 권한이 거부되었습니다. Safari 설정 > 웹사이트 > 동작 및 방향 > 허용');
-        return;
-      }
-    } catch(e) {
-      alert('자이로 권한 요청 실패: ' + e.message);
-    }
-  } else {
-    setDbg('GYRO: no permission API');
   }
 
   document.getElementById('overlay').style.display  = 'none';
