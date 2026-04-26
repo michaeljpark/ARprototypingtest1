@@ -4,45 +4,162 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
   <title>Sphere AR</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { overflow: hidden; background: #000; font-family: 'Courier New', monospace; }
-    #bg { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+      overflow: hidden; background: #000;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      color: #fff;
+    }
+    #bg     { position: fixed; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
     #canvas { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 1; touch-action: none; }
+    #panels { position: fixed; inset: 0; pointer-events: none; z-index: 4; }
+    #cards  { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
+
+    /* ── Start overlay ──────────────────────────────────────────────── */
     #overlay {
       position: fixed; inset: 0;
-      background: linear-gradient(135deg, rgba(0,8,12,0.96) 0%, rgba(0,20,28,0.96) 100%);
+      background: linear-gradient(135deg, rgba(8,8,12,0.97) 0%, rgba(20,16,30,0.97) 100%);
       display: flex; flex-direction: column; align-items: center; justify-content: center;
-      gap: 20px; z-index: 20;
+      gap: 22px; z-index: 30;
     }
-    #overlay h1 { color: #00ffcc; font-size: 26px; letter-spacing: 8px; text-shadow: 0 0 24px rgba(0,255,204,0.45); }
-    #overlay p { color: rgba(0,255,204,0.55); font-size: 13px; text-align: center; max-width: 256px; line-height: 1.9; }
+    #overlay h1 {
+      font-size: 26px; letter-spacing: 8px; font-weight: 600;
+      background: linear-gradient(135deg, #b18cff 0%, #5fa8ff 100%);
+      -webkit-background-clip: text; background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    #overlay p {
+      color: rgba(255,255,255,0.5); font-size: 13px; line-height: 1.8;
+      text-align: center; max-width: 280px;
+    }
     #start-btn {
-      margin-top: 8px; padding: 13px 44px;
-      background: transparent; color: #00ffcc;
-      border: 1.5px solid rgba(0,255,204,0.7); border-radius: 2px;
-      font-size: 14px; font-family: inherit; letter-spacing: 4px; cursor: pointer;
-      box-shadow: 0 0 18px rgba(0,255,204,0.15);
+      margin-top: 6px; padding: 13px 44px;
+      background: rgba(255,255,255,0.08);
+      color: #fff; border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 999px; font: inherit; font-size: 14px; letter-spacing: 3px;
+      cursor: pointer; backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
     }
-    #start-btn:active { background: rgba(0,255,204,0.12); box-shadow: 0 0 32px rgba(0,255,204,0.35); }
+    #start-btn:active { background: rgba(255,255,255,0.16); }
 
-    #hud {
-      display: none; position: fixed; bottom: 22px; left: 50%;
-      transform: translateX(-50%);
-      color: rgba(0,255,204,0.35); font-size: 10px; letter-spacing: 2px;
-      z-index: 10; pointer-events: none; text-align: center; white-space: nowrap;
+    /* ── Reticle (crosshair + loading ring) ────────────────────────── */
+    #reticle {
+      display: none;
+      position: fixed; top: 50%; left: 50%;
+      transform: translate(-50%,-50%);
+      width: 56px; height: 56px;
+      z-index: 8; pointer-events: none;
     }
-    #debug {
-      display: none; position: fixed; top: 12px; left: 12px;
-      color: #00ffcc; font-size: 11px; line-height: 1.5;
-      background: rgba(0,14,14,0.7); padding: 8px 12px;
-      border: 1px solid rgba(0,255,204,0.4); border-radius: 4px;
-      z-index: 10; pointer-events: none; min-width: 180px;
+    #reticle .dot {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%,-50%);
+      width: 6px; height: 6px;
+      background: rgba(255,255,255,0.85);
+      border-radius: 50%;
+      box-shadow: 0 0 8px rgba(255,255,255,0.5);
+      transition: width 0.2s, height 0.2s, opacity 0.2s;
     }
-    #crosshair { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 18px; height: 18px; z-index: 10; pointer-events: none; }
-    #crosshair::before, #crosshair::after { content:''; position:absolute; background: rgba(0,255,204,0.45); }
-    #crosshair::before { top: 50%; left: 0; width: 100%; height: 1px; transform: translateY(-50%); }
-    #crosshair::after  { top: 0; left: 50%; height: 100%; width: 1px; transform: translateX(-50%); }
+    #reticle.hover .dot { width: 3px; height: 3px; opacity: 0.55; }
+    #reticle svg {
+      position: absolute; inset: 0;
+      transform: rotate(-90deg);
+      opacity: 0; transition: opacity 0.2s;
+    }
+    #reticle.hover svg { opacity: 1; }
+    #reticle circle.track { fill:none; stroke:rgba(255,255,255,0.18); stroke-width:1.5; }
+    #reticle circle.bar {
+      fill:none; stroke:rgba(255,255,255,0.95); stroke-width:1.5; stroke-linecap:round;
+      stroke-dasharray: 163.36; stroke-dashoffset: 163.36;
+      transition: stroke-dashoffset 1.5s linear;
+    }
+    #reticle.loading circle.bar { stroke-dashoffset: 0; }
+
+    /* ── Cards ──────────────────────────────────────────────────────── */
+    .card {
+      position: absolute; top: 0; left: 0;
+      transform-origin: 0 0;
+      width: 240px;
+      background: rgba(20,20,24,0.62);
+      backdrop-filter: blur(22px) saturate(140%);
+      -webkit-backdrop-filter: blur(22px) saturate(140%);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 999px;
+      padding: 10px 18px 10px 10px;
+      display: flex; align-items: center; gap: 12px;
+      will-change: transform, opacity;
+      transition:
+        width 0.5s cubic-bezier(.2,.7,.2,1),
+        border-radius 0.5s cubic-bezier(.2,.7,.2,1),
+        padding 0.5s cubic-bezier(.2,.7,.2,1),
+        background 0.4s, box-shadow 0.4s;
+      box-shadow: 0 8px 28px rgba(0,0,0,0.3);
+      pointer-events: none; opacity: 0;
+    }
+    .card.visible { opacity: 1; }
+    .avatar {
+      flex: 0 0 36px; width: 36px; height: 36px; border-radius: 50%;
+      background: linear-gradient(135deg, #b18cff 0%, #6f8aff 50%, #5fcfff 100%);
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.06) inset;
+      transition: width 0.5s cubic-bezier(.2,.7,.2,1),
+                  height 0.5s cubic-bezier(.2,.7,.2,1),
+                  flex-basis 0.5s cubic-bezier(.2,.7,.2,1);
+    }
+    .head {
+      display: flex; align-items: baseline; gap: 6px;
+      font-size: 13px; line-height: 1.2; white-space: nowrap; overflow: hidden;
+    }
+    .head .name { font-weight: 700; color: #fff; }
+    .head .meta { color: rgba(255,255,255,0.45); font-weight: 400; font-size: 12px; }
+    .body {
+      grid-column: 1 / -1; margin-top: 0;
+      font-size: 14px; line-height: 1.45; color: rgba(255,255,255,0.92);
+      max-height: 0; overflow: hidden; opacity: 0;
+      transition: max-height 0.5s cubic-bezier(.2,.7,.2,1),
+                  opacity 0.4s ease 0.15s,
+                  margin-top 0.5s cubic-bezier(.2,.7,.2,1);
+    }
+    .card.expanded {
+      width: 320px; border-radius: 22px;
+      padding: 16px 20px 18px 16px;
+      display: grid; grid-template-columns: 44px 1fr; gap: 0 12px;
+      align-items: start;
+      background: rgba(18,18,22,0.7);
+      box-shadow: 0 16px 48px rgba(0,0,0,0.45);
+    }
+    .card.expanded .avatar { width: 44px; height: 44px; flex-basis: 44px; }
+    .card.expanded .head   { padding-top: 4px; }
+    .card.expanded .body   { max-height: 240px; opacity: 1; margin-top: 4px; }
+
+    /* ── Panels (map + video) ──────────────────────────────────────── */
+    .panel {
+      position: absolute; top: 0; left: 0;
+      transform-origin: 0 0;
+      border-radius: 16px; overflow: hidden;
+      background: #000;
+      border: 1px solid rgba(255,255,255,0.08);
+      box-shadow: 0 14px 40px rgba(0,0,0,0.5);
+      opacity: 0;
+      transition: opacity 0.4s;
+      will-change: transform;
+    }
+    .panel.visible { opacity: 0.7; }       /* 70% transparency */
+    .panel iframe, .panel #map {
+      width: 100%; height: 100%; border: 0; display: block;
+    }
+    .panel-label {
+      position: absolute; top: 10px; left: 12px;
+      font-size: 10px; letter-spacing: 2px;
+      color: rgba(255,255,255,0.7);
+      background: rgba(0,0,0,0.4);
+      padding: 4px 8px; border-radius: 999px;
+      pointer-events: none; z-index: 2;
+    }
+    /* Leaflet dark tweaks */
+    .leaflet-container { background: #0a0a0c !important; }
+    .leaflet-control-attribution { display: none !important; }
+    .leaflet-control-zoom { display: none !important; }
   </style>
 </head>
 <body>
@@ -50,20 +167,28 @@
 <video id="bg" autoplay playsinline muted></video>
 <canvas id="canvas"></canvas>
 
+<div id="panels"></div>
+<div id="cards"></div>
+
+<div id="reticle">
+  <svg width="56" height="56" viewBox="0 0 56 56">
+    <circle class="track" cx="28" cy="28" r="26"/>
+    <circle class="bar"   cx="28" cy="28" r="26"/>
+  </svg>
+  <div class="dot"></div>
+</div>
+
 <div id="overlay">
-  <h1>SPHERE AR</h1>
-  <p>카메라 + 자이로센서<br>구형 그리드 공간을 탐색합니다<br><br>폰을 360&deg; 움직여보세요</p>
+  <h1>SPHERE</h1>
+  <p>주변을 둘러보세요<br>응시하면 포스트가 펼쳐집니다</p>
   <button id="start-btn">ENTER</button>
 </div>
 
-<div id="hud">SPHERICAL GRID &nbsp;&middot;&nbsp; GYRO TRACKING</div>
-<div id="debug">GYRO: waiting...</div>
-<div id="crosshair"></div>
-
 <script src="https://cdn.jsdelivr.net/npm/three@0.153.0/build/three.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 function sphToVec3(r, lat, lon) {
-  var phi = THREE.MathUtils.degToRad(90 - lat);
+  var phi   = THREE.MathUtils.degToRad(90 - lat);
   var theta = THREE.MathUtils.degToRad(lon);
   return new THREE.Vector3(
     r * Math.sin(phi) * Math.cos(theta),
@@ -72,93 +197,79 @@ function sphToVec3(r, lat, lon) {
   );
 }
 
-function rrect(ctx, x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x+r, y); ctx.lineTo(x+w-r, y);
-  ctx.quadraticCurveTo(x+w, y, x+w, y+r);
-  ctx.lineTo(x+w, y+h-r);
-  ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
-  ctx.lineTo(x+r, y+h);
-  ctx.quadraticCurveTo(x, y+h, x, y+h-r);
-  ctx.lineTo(x, y+r);
-  ctx.quadraticCurveTo(x, y, x+r, y);
-  ctx.closePath();
-}
+var POSTS = [
+  "Hello World! Just dropped something new! What should I do for now?",
+  "오늘 한강에서 러닝. 노을이 미쳤다.",
+  "새 앨범 작업 중. 베이스라인이 끈적해.",
+  "커피 세 잔째. 마감은 친구.",
+  "Late night thoughts: what if dreams are just memories from another timeline?",
+  "처음으로 김치찌개 성공. 엄마가 자랑스러워해.",
+  "Reading 'Dune' again. Spice must flow.",
+  "비 오는 날 LP 듣기. 완벽한 토요일.",
+  "Just shipped v2.0. Ship it and pray.",
+  "Tokyo next week. Recommendations?",
+  "이 영화 본 사람? 엔딩 토론하고 싶어.",
+  "Building something cool. Stay tuned.",
+  "Sunset at the rooftop. No filter needed.",
+  "독서 모임 멤버 구함. DM 주세요.",
+  "New shoes, new energy. 일단 걷자.",
+  "Found this old photo. 2019 felt different.",
+  "오랜만에 친구들이랑 보드게임. 4시간 순삭.",
+  "Hot take: pineapple belongs on pizza. Fight me.",
+  "오늘 산 책 5권. 다 못 읽을 거 알아.",
+  "Morning yoga changed my whole vibe.",
+  "Snow on the mountain. Take me there.",
+  "Just one more episode. (lying)"
+];
 
-function makeLabel(text) {
-  var W = 224, H = 60;
-  var c = document.createElement('canvas');
-  c.width = W; c.height = H;
-  var ctx = c.getContext('2d');
-  ctx.fillStyle = 'rgba(0,14,14,0.82)';
-  rrect(ctx, 3, 3, W-6, H-6, 9);
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(0,255,204,0.9)';
-  ctx.lineWidth = 1.5;
-  ctx.stroke();
-  ctx.font = "bold 26px 'Courier New', monospace";
-  ctx.fillStyle = '#00ffcc';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(text, W/2, H/2);
-  var tex = new THREE.CanvasTexture(c);
-  var mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
-  var sprite = new THREE.Sprite(mat);
-  sprite.scale.set(1.9, 0.5, 1);
-  return sprite;
-}
+// Distribute 22 nodes around the sphere — none in the front band so the map+video sit alone
+var nodes = [];
+var bands = [
+  { lat:  0, count: 6, lonOffset:  60 },   // skip front (lon -60..60 covers panels)
+  { lat: 35, count: 6, lonOffset:  30 },
+  { lat:-35, count: 6, lonOffset:   0 },
+  { lat: 70, count: 1, lonOffset:   0 },
+  { lat:-70, count: 1, lonOffset:   0 },
+  { lat:  0, count: 2, lonOffset: 180 }    // back fillers
+];
+var idx = 0;
+bands.forEach(function(b) {
+  for (var i = 0; i < b.count; i++) {
+    if (idx >= 22) return;
+    nodes.push({
+      id: 'text' + (idx + 1),
+      name: 'text' + (idx + 1),
+      meta: 'your.hz · now',
+      body: POSTS[idx % POSTS.length],
+      lat: b.lat,
+      lon: b.lonOffset + (i * 360 / b.count)
+    });
+    idx++;
+  }
+});
 
-var dbg = document.getElementById('debug');
-function setDbg(msg) { dbg.innerText = msg; }
-
-var startBtn = document.getElementById('start-btn');
-var overlayP = document.querySelector('#overlay p');
-var overlayH = document.querySelector('#overlay h1');
-var step = 1;
-
-// STEP 1: 자이로 권한 (반드시 사용자 제스처 안에서 첫 호출)
-startBtn.addEventListener('click', async function handler() {
-  if (step === 1) {
-    if (typeof DeviceOrientationEvent !== 'undefined' &&
-        typeof DeviceOrientationEvent.requestPermission === 'function') {
-      try {
-        var res = await DeviceOrientationEvent.requestPermission();
-        setDbg('GYRO permission: ' + res);
-        if (res !== 'granted') {
-          alert('자이로센서 권한이 거부되었습니다.\nSafari 설정 > 동작 및 방향 액세스 > 허용');
-          return;
-        }
-      } catch(e) {
-        alert('자이로 권한 요청 실패: ' + e.message);
+document.getElementById('start-btn').addEventListener('click', async function() {
+  // iOS gyro permission first (in same gesture)
+  if (typeof DeviceOrientationEvent !== 'undefined' &&
+      typeof DeviceOrientationEvent.requestPermission === 'function') {
+    try {
+      var res = await DeviceOrientationEvent.requestPermission();
+      if (res !== 'granted') {
+        alert('자이로센서 권한이 필요합니다.\n설정 > Safari > 동작 및 방향 액세스 허용');
         return;
       }
-    } else {
-      setDbg('GYRO: no permission API (non-iOS)');
-    }
-
-    // STEP 2 UI로 전환
-    step = 2;
-    overlayH.textContent = 'CAMERA';
-    overlayP.innerHTML = '자이로 활성화 완료<br><br>다음으로 카메라를 시작합니다';
-    startBtn.textContent = 'START';
-    return;
+    } catch(e) { alert('권한 오류: ' + e.message); return; }
   }
-
-  // STEP 2: 카메라
+  // Camera
   try {
     var stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'environment', width: { ideal: 1280 } },
-      audio: false
+      video: { facingMode: 'environment', width: { ideal: 1280 } }, audio: false
     });
     document.getElementById('bg').srcObject = stream;
-  } catch(e) {
-    alert('카메라 오류: ' + e.message);
-  }
+  } catch(e) { console.warn('Camera:', e); }
 
-  document.getElementById('overlay').style.display  = 'none';
-  document.getElementById('hud').style.display       = 'block';
-  document.getElementById('debug').style.display     = 'block';
-  document.getElementById('crosshair').style.display = 'block';
+  document.getElementById('overlay').style.display = 'none';
+  document.getElementById('reticle').style.display = 'block';
   init();
 });
 
@@ -170,120 +281,142 @@ function init() {
   renderer.setClearColor(0x000000, 0);
 
   var scene  = new THREE.Scene();
-  var camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.1, 60);
+  var camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.01, 100);
   scene.add(camera);
 
-  var R = 10;
+  var R_CARD  = 8;
+  var R_PANEL = 4;   // closer so panels feel substantial
 
-  var sGeo = new THREE.SphereGeometry(R, 24, 16);
-  var sMat = new THREE.MeshBasicMaterial({
-    color: 0x00ffcc, wireframe: true,
-    transparent: true, opacity: 0.09, side: THREE.BackSide
+  // ── Build cards ────────────────────────────────────────────────────
+  var cardsRoot = document.getElementById('cards');
+  var reticle = document.getElementById('reticle');
+
+  var cards = nodes.map(function(n) {
+    var el = document.createElement('div');
+    el.className = 'card';
+    el.innerHTML =
+      '<div class="avatar"></div>' +
+      '<div class="head">' +
+        '<span class="name">' + n.name + '</span>' +
+        '<span class="meta">' + n.meta + '</span>' +
+      '</div>' +
+      '<div class="body">' + n.body + '</div>';
+    cardsRoot.appendChild(el);
+    return {
+      data: n, el: el,
+      worldPos: sphToVec3(R_CARD, n.lat, n.lon),
+      expanded: false
+    };
   });
-  scene.add(new THREE.Mesh(sGeo, sMat));
 
-  var equatorMat = new THREE.MeshBasicMaterial({ color: 0x00ffcc, transparent: true, opacity: 0.4 });
-  var equator = new THREE.Mesh(new THREE.TorusGeometry(R, 0.025, 8, 120), equatorMat);
-  scene.add(equator);
+  // ── Build panels (map left, video right) ───────────────────────────
+  // Initial forward view = lon 0, lat 0
+  // Place panels symmetrically around forward
+  var panelsRoot = document.getElementById('panels');
 
-  for (var i = 0; i < 4; i++) {
-    var m = new THREE.Mesh(
-      new THREE.TorusGeometry(R, 0.012, 8, 120),
-      new THREE.MeshBasicMaterial({ color: 0x00ffcc, transparent: true, opacity: 0.18 })
-    );
-    m.rotation.y = (i / 4) * Math.PI;
-    m.rotation.x = Math.PI / 2;
-    scene.add(m);
+  function makePanel(opts) {
+    var el = document.createElement('div');
+    el.className = 'panel';
+    el.style.width  = opts.w + 'px';
+    el.style.height = opts.h + 'px';
+    if (opts.label) {
+      var lab = document.createElement('div');
+      lab.className = 'panel-label';
+      lab.textContent = opts.label;
+      el.appendChild(lab);
+    }
+    el.appendChild(opts.inner);
+    panelsRoot.appendChild(el);
+    return {
+      el: el,
+      w: opts.w, h: opts.h,
+      worldPos: sphToVec3(R_PANEL, opts.lat, opts.lon)
+    };
   }
 
-  var nodes = [
-    { label: 'text1',  lat:  0,  lon:   0 },
-    { label: 'text2',  lat:  0,  lon:  45 },
-    { label: 'text3',  lat:  0,  lon:  90 },
-    { label: 'text4',  lat:  0,  lon: 135 },
-    { label: 'text5',  lat:  0,  lon: 180 },
-    { label: 'text6',  lat:  0,  lon: 225 },
-    { label: 'text7',  lat:  0,  lon: 270 },
-    { label: 'text8',  lat:  0,  lon: 315 },
-    { label: 'text9',  lat:  45, lon:   0 },
-    { label: 'text10', lat:  45, lon:  60 },
-    { label: 'text11', lat:  45, lon: 120 },
-    { label: 'text12', lat:  45, lon: 180 },
-    { label: 'text13', lat:  45, lon: 240 },
-    { label: 'text14', lat:  45, lon: 300 },
-    { label: 'text15', lat: -45, lon:  30 },
-    { label: 'text16', lat: -45, lon:  90 },
-    { label: 'text17', lat: -45, lon: 150 },
-    { label: 'text18', lat: -45, lon: 210 },
-    { label: 'text19', lat: -45, lon: 270 },
-    { label: 'text20', lat: -45, lon: 330 },
-    { label: 'text21', lat:  80, lon:   0 },
-    { label: 'text22', lat: -80, lon:   0 }
-  ];
+  // MAP (4:3, left of forward view)
+  var mapHost = document.createElement('div');
+  mapHost.id = 'map';
+  var MAP_W = 320, MAP_H = 240; // 4:3
+  var mapPanel = makePanel({ w: MAP_W, h: MAP_H, lat: 0, lon: -22, label: 'MAP', inner: mapHost });
 
-  nodes.forEach(function(n) {
-    var dot = new THREE.Mesh(
-      new THREE.SphereGeometry(0.09, 8, 8),
-      new THREE.MeshBasicMaterial({ color: 0x00ffcc })
-    );
-    dot.position.copy(sphToVec3(R - 0.05, n.lat, n.lon));
-    scene.add(dot);
+  // VIDEO (16:9, right of forward view)
+  var iframe = document.createElement('iframe');
+  iframe.src = 'https://www.youtube.com/embed/2Kw0XdKqJwE?autoplay=1&mute=1&controls=0&loop=1&playlist=2Kw0XdKqJwE&modestbranding=1&playsinline=1&rel=0';
+  iframe.allow = 'autoplay; encrypted-media; picture-in-picture';
+  iframe.setAttribute('playsinline', '');
+  var VID_W = 426, VID_H = 240; // 16:9 matching map height
+  var videoPanel = makePanel({ w: VID_W, h: VID_H, lat: 0, lon: 22, label: 'LIVE', inner: iframe });
 
-    var sprite = makeLabel(n.label);
-    sprite.position.copy(sphToVec3(R - 0.9, n.lat, n.lon));
-    scene.add(sprite);
+  var panels = [mapPanel, videoPanel];
+
+  // Init Leaflet map (Toronto fallback)
+  var DEFAULT_LAT = 43.6532, DEFAULT_LON = -79.3832; // Toronto
+  var lmap = L.map(mapHost, {
+    center: [DEFAULT_LAT, DEFAULT_LON],
+    zoom: 13,
+    zoomControl: false, attributionControl: false,
+    dragging: false, scrollWheelZoom: false, doubleClickZoom: false,
+    boxZoom: false, keyboard: false, touchZoom: false, tap: false
   });
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+    subdomains: 'abcd', maxZoom: 19
+  }).addTo(lmap);
+  L.circleMarker([DEFAULT_LAT, DEFAULT_LON], {
+    radius: 7, color: '#5fa8ff', fillColor: '#b18cff', fillOpacity: 0.9, weight: 2
+  }).addTo(lmap);
+  setTimeout(function() { lmap.invalidateSize(); }, 200);
 
-  // ── Gyroscope (proper Three.js DeviceOrientationControls math) ──────────
+  // Try real geolocation; on success, recenter
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(function(pos) {
+      var la = pos.coords.latitude, lo = pos.coords.longitude;
+      lmap.setView([la, lo], 14);
+      L.circleMarker([la, lo], {
+        radius: 8, color: '#fff', fillColor: '#5fa8ff', fillOpacity: 0.9, weight: 2
+      }).addTo(lmap);
+    }, function() { /* keep Toronto */ }, { timeout: 6000, maximumAge: 60000 });
+  }
+
+  // ── Gyro ────────────────────────────────────────────────────────────
   var zee = new THREE.Vector3(0, 0, 1);
-  var q1  = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5)); // -PI/2 around X
+  var q1  = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5));
   var q0  = new THREE.Quaternion();
   var euler = new THREE.Euler();
   var gyroActive = false;
-  var lastAlpha = null;
-
-  function setCameraQuat(alpha, beta, gamma, orient) {
-    euler.set(beta, alpha, -gamma, 'YXZ');
-    camera.quaternion.setFromEuler(euler);
-    camera.quaternion.multiply(q1);
-    camera.quaternion.multiply(q0.setFromAxisAngle(zee, -orient));
-  }
+  var alpha0 = null;     // capture initial heading so "front" = where user starts
+  var alphaOffset = 0;
 
   function onOrientation(e) {
-    if (e.alpha === null || e.alpha === undefined) {
-      setDbg('GYRO: alpha=null');
-      return;
-    }
+    if (e.alpha === null || e.alpha === undefined) return;
     gyroActive = true;
-    var a = THREE.MathUtils.degToRad(e.alpha);
+    if (alpha0 === null) {
+      alpha0 = e.alpha;
+      alphaOffset = THREE.MathUtils.degToRad(alpha0);
+    }
+    var a = THREE.MathUtils.degToRad(e.alpha) - alphaOffset;
     var b = THREE.MathUtils.degToRad(e.beta);
     var g = THREE.MathUtils.degToRad(e.gamma);
     var o = THREE.MathUtils.degToRad((screen.orientation && screen.orientation.angle) || window.orientation || 0);
-    setCameraQuat(a, b, g, o);
-    lastAlpha = e.alpha;
-    setDbg(
-      'GYRO ON\n' +
-      'a: ' + e.alpha.toFixed(1) + '\n' +
-      'b: ' + e.beta.toFixed(1) + '\n' +
-      'g: ' + e.gamma.toFixed(1)
-    );
+    euler.set(b, a, -g, 'YXZ');
+    camera.quaternion.setFromEuler(euler);
+    camera.quaternion.multiply(q1);
+    camera.quaternion.multiply(q0.setFromAxisAngle(zee, -o));
   }
-
-  // Try absolute first (more stable on iOS), fallback to regular
   if ('ondeviceorientationabsolute' in window) {
     window.addEventListener('deviceorientationabsolute', onOrientation, true);
   }
   window.addEventListener('deviceorientation', onOrientation, true);
 
-  // Drag fallback (desktop / no gyro)
+  // Drag fallback (desktop)
   var dragging = false, px = 0, py = 0, yaw = 0, pitch = 0;
   canvas.addEventListener('pointerdown', function(e) { dragging = true; px = e.clientX; py = e.clientY; });
   window.addEventListener('pointerup',   function()  { dragging = false; });
   canvas.addEventListener('pointermove', function(e) {
     if (!dragging || gyroActive) return;
-    yaw   -= (e.clientX - px) * 0.003;
-    pitch -= (e.clientY - py) * 0.003;
-    pitch  = Math.max(-Math.PI/2, Math.min(Math.PI/2, pitch));
+    yaw   -= (e.clientX - px) * 0.004;
+    pitch -= (e.clientY - py) * 0.004;
+    pitch  = Math.max(-Math.PI/2.1, Math.min(Math.PI/2.1, pitch));
     px = e.clientX; py = e.clientY;
     var qY = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0), yaw);
     var qX = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0), pitch);
@@ -296,18 +429,94 @@ function init() {
     renderer.setSize(innerWidth, innerHeight);
   });
 
-  // After 2s if no gyro events, alert user
-  setTimeout(function() {
-    if (!gyroActive) {
-      setDbg('GYRO: no events received\n드래그로 둘러보세요');
-    }
-  }, 2000);
+  // ── Reticle hover state ────────────────────────────────────────────
+  var HOVER_RADIUS = 70;
+  var HOLD_MS = 1500;
+  var hoverTarget = null, hoverStart = 0;
 
-  var clock = new THREE.Clock();
+  function startHover(card) {
+    hoverTarget = card; hoverStart = performance.now();
+    reticle.classList.add('hover');
+    var bar = reticle.querySelector('circle.bar');
+    bar.style.transition = 'none';
+    bar.style.strokeDashoffset = '163.36';
+    bar.getBoundingClientRect();
+    bar.style.transition = '';
+    reticle.classList.add('loading');
+  }
+  function endHover() {
+    hoverTarget = null;
+    reticle.classList.remove('hover', 'loading');
+    var bar = reticle.querySelector('circle.bar');
+    bar.style.transition = 'none';
+    bar.style.strokeDashoffset = '163.36';
+    bar.getBoundingClientRect();
+    bar.style.transition = '';
+  }
+
+  // ── Project helper ─────────────────────────────────────────────────
+  var v = new THREE.Vector3();
+  function projectToScreen(worldPos) {
+    v.copy(worldPos).project(camera);
+    if (v.z > 1 || v.z < -1) return null;
+    return {
+      x: (v.x * 0.5 + 0.5) * innerWidth,
+      y: (-v.y * 0.5 + 0.5) * innerHeight
+    };
+  }
+
+  // ── Animate ────────────────────────────────────────────────────────
   (function animate() {
     requestAnimationFrame(animate);
-    var t = clock.getElapsedTime();
-    equator.material.opacity = 0.28 + 0.12 * Math.sin(t * 1.4);
+    var cx = innerWidth/2, cy = innerHeight/2;
+
+    // Panels (anchor by center)
+    for (var p = 0; p < panels.length; p++) {
+      var pn = panels[p];
+      var sp = projectToScreen(pn.worldPos);
+      if (!sp) { pn.el.classList.remove('visible'); continue; }
+      if (sp.x < -pn.w || sp.x > innerWidth + pn.w ||
+          sp.y < -pn.h || sp.y > innerHeight + pn.h) {
+        pn.el.classList.remove('visible'); continue;
+      }
+      pn.el.classList.add('visible');
+      var tx = sp.x - pn.w/2;
+      var ty = sp.y - pn.h/2;
+      pn.el.style.transform = 'translate3d(' + tx + 'px,' + ty + 'px,0)';
+    }
+
+    // Cards
+    var nearest = null, nearestDist = Infinity;
+    for (var i = 0; i < cards.length; i++) {
+      var c = cards[i];
+      var s = projectToScreen(c.worldPos);
+      if (!s) { c.el.classList.remove('visible'); continue; }
+      if (s.x < -260 || s.x > innerWidth + 20 || s.y < -100 || s.y > innerHeight + 20) {
+        c.el.classList.remove('visible'); continue;
+      }
+      c.el.classList.add('visible');
+      var tx = s.x - 22;
+      var ty = s.y - (c.expanded ? 30 : 28);
+      c.el.style.transform = 'translate3d(' + tx + 'px,' + ty + 'px,0)';
+
+      var dx = s.x - cx, dy = s.y - cy;
+      var d = Math.sqrt(dx*dx + dy*dy);
+      if (d < nearestDist) { nearestDist = d; nearest = c; }
+    }
+
+    if (nearest && nearestDist < HOVER_RADIUS && !nearest.expanded) {
+      if (hoverTarget !== nearest) {
+        if (hoverTarget) endHover();
+        startHover(nearest);
+      } else if (performance.now() - hoverStart >= HOLD_MS) {
+        nearest.expanded = true;
+        nearest.el.classList.add('expanded');
+        endHover();
+      }
+    } else if (hoverTarget) {
+      endHover();
+    }
+
     renderer.render(scene, camera);
   })();
 }
