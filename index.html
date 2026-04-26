@@ -1,305 +1,288 @@
-<!DOCTYPE html>
-<html lang="ko">
+﻿<!DOCTYPE html>
+<html>
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <title>Wall Marquee AR</title>
-  <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
-  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>Sphere AR</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body {
-      width: 100%; height: 100%; overflow: hidden; background: #000; color: #fff;
-      font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', system-ui, sans-serif;
-      -webkit-font-smoothing: antialiased;
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { overflow: hidden; background: #000; font-family: 'Courier New', monospace; }
+    #bg {
+      position: fixed; inset: 0;
+      width: 100%; height: 100%;
+      object-fit: cover; z-index: 0;
     }
-
-    /* ── Intro ── */
-    #intro {
-      position: fixed; inset: 0; z-index: 50;
-      display: flex; flex-direction: column; justify-content: center; align-items: center;
-      padding: 32px 24px; gap: 16px;
-      background: radial-gradient(ellipse at top, #1a0028 0%, transparent 60%),
-                  linear-gradient(180deg, #0a0014, #000);
+    #canvas {
+      position: fixed; inset: 0;
+      width: 100%; height: 100%;
+      z-index: 1; touch-action: none;
     }
-    #intro h1 {
-      font-size: 30px; font-weight: 800; letter-spacing: -.03em; text-align: center;
-      background: linear-gradient(90deg, #ff2266, #ff8800);
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-    }
-    .sub { font-size: 14px; line-height: 1.65; color: #999; text-align: center; max-width: 300px; }
-    #marquee-input {
-      width: 100%; max-width: 320px; padding: 13px 16px;
-      background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.15);
-      border-radius: 12px; color: #fff; font-size: 15px; outline: none; transition: border-color .15s;
-    }
-    #marquee-input:focus { border-color: #ff2266; }
-    #start-btn {
-      padding: 14px 36px; border: none; border-radius: 999px; cursor: pointer;
-      background: linear-gradient(90deg, #ff2266, #ff8800); color: #fff;
-      font-size: 16px; font-weight: 700; box-shadow: 0 8px 28px rgba(255,34,102,.4);
-    }
-    #marker-link {
-      font-size: 13px; color: #ff8800; text-decoration: underline;
-      cursor: pointer; text-align: center;
-    }
-    .step {
-      font-size: 12px; color: #555; text-align: center; max-width: 300px; line-height: 1.7;
-    }
-    .step b { color: #888; }
-
-    /* ── AR overlay ── */
     #overlay {
-      position: fixed; inset: 0; z-index: 100; pointer-events: none; display: none;
+      position: fixed; inset: 0;
+      background: linear-gradient(135deg, rgba(0,8,12,0.96) 0%, rgba(0,20,28,0.96) 100%);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 20px; z-index: 20;
     }
-    #status {
-      position: absolute;
-      top: max(env(safe-area-inset-top, 0px), 12px); left: 50%;
-      transform: translateX(-50%); margin-top: 8px; padding: 7px 16px;
-      background: rgba(0,0,0,.65); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
-      border: 1px solid rgba(255,255,255,.12); border-radius: 999px;
-      font-size: 12px; font-weight: 600; letter-spacing: .02em; white-space: nowrap;
+    #overlay h1 {
+      color: #00ffcc; font-size: 26px;
+      letter-spacing: 8px;
+      text-shadow: 0 0 24px rgba(0,255,204,0.45);
     }
-    #controls {
-      position: absolute; bottom: 0; left: 0; right: 0;
-      padding: 12px 14px calc(12px + env(safe-area-inset-bottom, 0px));
-      display: flex; flex-direction: column; gap: 9px;
-      background: linear-gradient(to top, rgba(0,0,0,.75) 0%, transparent 100%);
-      pointer-events: all;
+    #overlay p {
+      color: rgba(0,255,204,0.55); font-size: 13px;
+      text-align: center; max-width: 256px; line-height: 1.9;
     }
-    #ctrl-text {
-      width: 100%; padding: 10px 14px;
-      background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.18);
-      border-radius: 999px; color: #fff; font-size: 14px; outline: none;
+    #start-btn {
+      margin-top: 8px; padding: 13px 44px;
+      background: transparent;
+      color: #00ffcc; border: 1.5px solid rgba(0,255,204,0.7);
+      border-radius: 2px; font-size: 14px;
+      font-family: inherit; letter-spacing: 4px; cursor: pointer;
+      box-shadow: 0 0 18px rgba(0,255,204,0.15);
+      transition: box-shadow 0.2s, background 0.2s;
     }
-    #ctrl-btns { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
-    .btn {
-      padding: 9px 15px; border: 1px solid rgba(255,255,255,.18); border-radius: 999px;
-      background: rgba(255,255,255,.1); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-      color: #fff; font-size: 13px; font-weight: 600; cursor: pointer;
-      -webkit-tap-highlight-color: transparent;
+    #start-btn:active {
+      background: rgba(0,255,204,0.12);
+      box-shadow: 0 0 32px rgba(0,255,204,0.35);
     }
+    #hud {
+      display: none;
+      position: fixed; bottom: 22px; left: 50%;
+      transform: translateX(-50%);
+      color: rgba(0,255,204,0.35); font-size: 10px;
+      letter-spacing: 2px; z-index: 10;
+      pointer-events: none; text-align: center; white-space: nowrap;
+    }
+    #crosshair {
+      display: none;
+      position: fixed; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 18px; height: 18px;
+      z-index: 10; pointer-events: none;
+    }
+    #crosshair::before, #crosshair::after {
+      content: ''; position: absolute; background: rgba(0,255,204,0.45);
+    }
+    #crosshair::before { top: 50%; left: 0; width: 100%; height: 1px; transform: translateY(-50%); }
+    #crosshair::after  { top: 0; left: 50%; height: 100%; width: 1px; transform: translateX(-50%); }
   </style>
 </head>
 <body>
 
-<!-- ── INTRO ── -->
-<div id="intro">
-  <h1>Wall Marquee AR</h1>
-  <p class="sub">Hiro 마커를 벽에 붙이거나 화면에 띄운 후<br>카메라로 가리키면 전광판이 나타납니다.</p>
-  <input id="marquee-input" type="text" placeholder="마키 텍스트 입력..."
-         value="★ NOW PLAYING ★ BROADWAY LIVE ★ ">
-  <button id="start-btn">카메라 시작</button>
-  <a id="marker-link"
-     href="https://raw.githack.com/AR-js-org/AR.js/master/data/images/hiro.png"
-     target="_blank" rel="noopener">
-    → Hiro 마커 열기 (출력 또는 화면에 띄우기)
-  </a>
-  <p class="step">
-    <b>① 마커 열기</b> → 다른 기기 화면이나 종이에 띄우기<br>
-    <b>② 카메라 시작</b> → 마커를 카메라 중앙에 맞추기<br>
-    <b>③</b> 마커가 인식되면 전광판이 공간에 고정됨
-  </p>
-</div>
+<video id="bg" autoplay playsinline muted></video>
+<canvas id="canvas"></canvas>
 
-<!-- ── AR OVERLAY ── -->
 <div id="overlay">
-  <div id="status">Hiro 마커를 카메라에 보여주세요…</div>
-  <div id="controls">
-    <input id="ctrl-text" type="text" placeholder="텍스트 변경...">
-    <div id="ctrl-btns">
-      <button class="btn" id="btn-speed">속도 0.4</button>
-      <button class="btn" id="btn-size">크기 M</button>
-    </div>
-  </div>
+  <h1>SPHERE AR</h1>
+  <p>카메라 + 자이로센서<br>구형 그리드 공간을 탐색합니다<br><br>폰을 360&deg; 움직여보세요</p>
+  <button id="start-btn">ENTER</button>
 </div>
 
-<script>
-  // ── Config ──
-  const speeds = [0.2, 0.4, 0.8, 1.5];
-  const sizes  = [
-    { l: 'S', w: 0.8,  h: 0.15 },
-    { l: 'M', w: 1.6,  h: 0.29 },
-    { l: 'L', w: 2.6,  h: 0.47 },
-  ];
-  let si = 1, szi = 1;
-  let marqueeEntity = null;
+<div id="hud">SPHERICAL GRID &nbsp;&middot;&nbsp; GYRO TRACKING</div>
+<div id="crosshair"></div>
 
-  function setStatus(t) {
-    document.getElementById('status').textContent = t;
+<script src="https://cdn.jsdelivr.net/npm/three@0.153.0/build/three.min.js"></script>
+<script>
+function sphToVec3(r, lat, lon) {
+  var phi   = THREE.MathUtils.degToRad(90 - lat);
+  var theta = THREE.MathUtils.degToRad(lon);
+  return new THREE.Vector3(
+    r * Math.sin(phi) * Math.cos(theta),
+    r * Math.cos(phi),
+    r * Math.sin(phi) * Math.sin(theta)
+  );
+}
+
+function rrect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x+r, y); ctx.lineTo(x+w-r, y);
+  ctx.quadraticCurveTo(x+w, y, x+w, y+r);
+  ctx.lineTo(x+w, y+h-r);
+  ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
+  ctx.lineTo(x+r, y+h);
+  ctx.quadraticCurveTo(x, y+h, x, y+h-r);
+  ctx.lineTo(x, y+r);
+  ctx.quadraticCurveTo(x, y, x+r, y);
+  ctx.closePath();
+}
+
+function makeLabel(text) {
+  var W = 224, H = 60;
+  var c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  var ctx = c.getContext('2d');
+
+  ctx.fillStyle = 'rgba(0,14,14,0.82)';
+  rrect(ctx, 3, 3, W-6, H-6, 9);
+  ctx.fill();
+
+  ctx.strokeStyle = 'rgba(0,255,204,0.9)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+
+  ctx.font = "bold 26px 'Courier New', monospace";
+  ctx.fillStyle = '#00ffcc';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, W/2, H/2);
+
+  var tex = new THREE.CanvasTexture(c);
+  var mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false });
+  var sprite = new THREE.Sprite(mat);
+  sprite.scale.set(1.9, 0.5, 1);
+  return sprite;
+}
+
+document.getElementById('start-btn').addEventListener('click', async function() {
+  try {
+    var stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 1280 } },
+      audio: false
+    });
+    document.getElementById('bg').srcObject = stream;
+  } catch(e) { console.warn('Camera unavailable:', e); }
+
+  if (typeof DeviceOrientationEvent !== 'undefined' &&
+      typeof DeviceOrientationEvent.requestPermission === 'function') {
+    try {
+      var res = await DeviceOrientationEvent.requestPermission();
+      if (res !== 'granted') alert('자이로센서 권한이 필요합니다.');
+    } catch(e) { console.warn(e); }
   }
 
-  // ── A-Frame component: animated marquee plane ──
-  AFRAME.registerComponent('marquee-sign', {
-    schema: {
-      text:   { type: 'string', default: '★ NOW PLAYING ★ BROADWAY LIVE ★ ' },
-      speed:  { type: 'number', default: 0.4 },
-      width:  { type: 'number', default: 1.6 },
-      height: { type: 'number', default: 0.29 },
-    },
+  document.getElementById('overlay').style.display  = 'none';
+  document.getElementById('hud').style.display       = 'block';
+  document.getElementById('crosshair').style.display = 'block';
+  init();
+});
 
-    init() {
-      this.mesh    = null;
-      this.texture = null;
-      this._t      = 0;
-    },
+function init() {
+  var canvas   = document.getElementById('canvas');
+  var renderer = new THREE.WebGLRenderer({ canvas: canvas, alpha: true, antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.setClearColor(0x000000, 0);
 
-    update(oldData) {
-      const d = this.data;
-      const needsRebuild = !oldData ||
-        d.text !== oldData.text || d.width !== oldData.width || d.height !== oldData.height;
-      if (needsRebuild) this._buildMesh();
-    },
+  var scene  = new THREE.Scene();
+  var camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.1, 60);
+  scene.add(camera);
 
-    _buildMesh() {
-      const THREE = AFRAME.THREE;
-      if (this.mesh) {
-        this.el.object3D.remove(this.mesh);
-        this.mesh.geometry.dispose();
-        this.mesh.material.dispose();
-      }
-      if (this.texture) this.texture.dispose();
+  var R = 10;
 
-      const { width, height, text } = this.data;
+  // Sphere wireframe (inside view)
+  var sGeo = new THREE.SphereGeometry(R, 24, 16);
+  var sMat = new THREE.MeshBasicMaterial({
+    color: 0x00ffcc, wireframe: true,
+    transparent: true, opacity: 0.09, side: THREE.BackSide
+  });
+  scene.add(new THREE.Mesh(sGeo, sMat));
 
-      // Canvas texture
-      const W = 2048, H = 256;
-      const cv = document.createElement('canvas');
-      cv.width = W; cv.height = H;
-      const ctx = cv.getContext('2d');
-      ctx.fillStyle = '#070010';
-      ctx.fillRect(0, 0, W, H);
-      ctx.fillStyle = 'rgba(255,34,102,.07)';
-      for (let y = 0; y < H; y += 4) ctx.fillRect(0, y, W, 1);
-      ctx.font = 'bold 140px -apple-system,"Helvetica Neue",Arial,sans-serif';
-      ctx.textBaseline = 'middle';
-      ctx.shadowColor  = '#ff0055';
-      ctx.shadowBlur   = 40;
-      ctx.fillStyle    = '#ff3a78';
-      const tw = Math.max(ctx.measureText(text).width, 1);
-      const n  = Math.ceil(W / tw) + 2;
-      for (let i = 0; i < n; i++) ctx.fillText(text, i * tw, H / 2);
+  // Equator ring
+  var equatorMat = new THREE.MeshBasicMaterial({ color: 0x00ffcc, transparent: true, opacity: 0.4 });
+  var equator = new THREE.Mesh(new THREE.TorusGeometry(R, 0.025, 8, 120), equatorMat);
+  scene.add(equator);
 
-      this.texture = new THREE.CanvasTexture(cv);
-      this.texture.wrapS     = THREE.RepeatWrapping;
-      this.texture.wrapT     = THREE.ClampToEdgeWrapping;
-      this.texture.minFilter = THREE.LinearFilter;
-      this.texture.magFilter = THREE.LinearFilter;
-      this.texture.anisotropy = 4;
+  // 4 meridian rings
+  for (var i = 0; i < 4; i++) {
+    var m = new THREE.Mesh(
+      new THREE.TorusGeometry(R, 0.012, 8, 120),
+      new THREE.MeshBasicMaterial({ color: 0x00ffcc, transparent: true, opacity: 0.18 })
+    );
+    m.rotation.y = (i / 4) * Math.PI;
+    m.rotation.x = Math.PI / 2;
+    scene.add(m);
+  }
 
-      const geo = new THREE.PlaneGeometry(width, height);
-      const mat = new THREE.ShaderMaterial({
-        uniforms: {
-          map:  { value: this.texture },
-          uOff: { value: 0 },
-          uRep: { value: Math.max(width / 1.6, 0.1) },
-          uA:   { value: 1.0 },
-        },
-        vertexShader: `
-          varying vec2 vUv;
-          void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }
-        `,
-        fragmentShader: `
-          uniform sampler2D map;
-          uniform float uOff, uRep, uA;
-          varying vec2 vUv;
-          void main(){
-            vec4 c = texture2D(map, vec2(vUv.x * uRep + uOff, vUv.y));
-            gl_FragColor = vec4(c.rgb, c.a * uA);
-          }
-        `,
-        side:        THREE.DoubleSide,
-        transparent: true,
-        depthWrite:  false,
-      });
+  // Label nodes distributed on sphere
+  var nodes = [
+    { label: 'text1',  lat:  0,  lon:   0 },
+    { label: 'text2',  lat:  0,  lon:  45 },
+    { label: 'text3',  lat:  0,  lon:  90 },
+    { label: 'text4',  lat:  0,  lon: 135 },
+    { label: 'text5',  lat:  0,  lon: 180 },
+    { label: 'text6',  lat:  0,  lon: 225 },
+    { label: 'text7',  lat:  0,  lon: 270 },
+    { label: 'text8',  lat:  0,  lon: 315 },
+    { label: 'text9',  lat:  45, lon:   0 },
+    { label: 'text10', lat:  45, lon:  60 },
+    { label: 'text11', lat:  45, lon: 120 },
+    { label: 'text12', lat:  45, lon: 180 },
+    { label: 'text13', lat:  45, lon: 240 },
+    { label: 'text14', lat:  45, lon: 300 },
+    { label: 'text15', lat: -45, lon:  30 },
+    { label: 'text16', lat: -45, lon:  90 },
+    { label: 'text17', lat: -45, lon: 150 },
+    { label: 'text18', lat: -45, lon: 210 },
+    { label: 'text19', lat: -45, lon: 270 },
+    { label: 'text20', lat: -45, lon: 330 },
+    { label: 'text21', lat:  80, lon:   0 },
+    { label: 'text22', lat: -80, lon:   0 }
+  ];
 
-      this.mesh = new THREE.Mesh(geo, mat);
-      this.el.object3D.add(this.mesh);
-    },
+  nodes.forEach(function(n) {
+    var dot = new THREE.Mesh(
+      new THREE.SphereGeometry(0.09, 8, 8),
+      new THREE.MeshBasicMaterial({ color: 0x00ffcc })
+    );
+    dot.position.copy(sphToVec3(R - 0.05, n.lat, n.lon));
+    scene.add(dot);
 
-    tick(time) {
-      if (this.mesh) {
-        this.mesh.material.uniforms.uOff.value = -(time / 1000) * this.data.speed / 2.5;
-      }
-    },
-
-    remove() {
-      if (this.mesh) {
-        this.el.object3D.remove(this.mesh);
-        this.mesh.geometry.dispose();
-        this.mesh.material.dispose();
-      }
-      if (this.texture) this.texture.dispose();
-    },
+    var sprite = makeLabel(n.label);
+    sprite.position.copy(sphToVec3(R - 0.9, n.lat, n.lon));
+    scene.add(sprite);
   });
 
-  // ── Start ──
-  document.getElementById('start-btn').addEventListener('click', () => {
-    const rawText = document.getElementById('marquee-input').value.trim();
-    const text    = (rawText || '★ NOW PLAYING ★ BROADWAY LIVE ★ ') + ' ';
-    document.getElementById('ctrl-text').value = rawText;
+  // Gyroscope
+  var _q1 = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5));
+  var _q0 = new THREE.Quaternion();
+  var _eu = new THREE.Euler();
+  var gyroActive = false;
 
-    // Build A-Frame scene dynamically (avoids camera prompt on page load)
-    const scene = document.createElement('a-scene');
-    scene.setAttribute('arjs', 'sourceType: webcam; debugUIEnabled: false;');
-    scene.setAttribute('renderer', 'logarithmicDepthBuffer: true;');
-    scene.setAttribute('vr-mode-ui', 'enabled: false');
+  window.addEventListener('deviceorientation', function(e) {
+    if (e.alpha === null) return;
+    gyroActive = true;
+    var a = THREE.MathUtils.degToRad(e.alpha);
+    var b = THREE.MathUtils.degToRad(e.beta);
+    var g = THREE.MathUtils.degToRad(e.gamma);
+    var orient = THREE.MathUtils.degToRad((screen.orientation && screen.orientation.angle) || 0);
+    _eu.set(b, a, -g, 'YXZ');
+    camera.quaternion.setFromEuler(_eu);
+    camera.quaternion.multiply(_q1);
+    _q0.setFromAxisAngle(new THREE.Vector3(0, 0, 1), -orient);
+    camera.quaternion.premultiply(_q0);
+  }, true);
 
-    const marker = document.createElement('a-marker');
-    marker.setAttribute('preset', 'hiro');
-    marker.setAttribute('id', 'hiro-marker');
-
-    marker.addEventListener('markerFound', () =>
-      setStatus('마커 인식됨 — 카메라를 안정적으로 유지하세요'));
-    marker.addEventListener('markerLost', () =>
-      setStatus('Hiro 마커를 카메라에 보여주세요…'));
-
-    // Entity sits flat on the marker surface (rotation -90 aligns XY plane to marker face)
-    const entity = document.createElement('a-entity');
-    entity.setAttribute('id', 'marquee-entity');
-    entity.setAttribute('rotation', '-90 0 0');
-    entity.setAttribute('marquee-sign', {
-      text,
-      speed:  speeds[si],
-      width:  sizes[szi].w,
-      height: sizes[szi].h,
-    });
-
-    marker.appendChild(entity);
-
-    const cam = document.createElement('a-entity');
-    cam.setAttribute('camera', '');
-
-    scene.appendChild(marker);
-    scene.appendChild(cam);
-    document.body.appendChild(scene);
-
-    marqueeEntity = entity;
-    document.getElementById('intro').style.display   = 'none';
-    document.getElementById('overlay').style.display = 'block';
+  // Touch/mouse drag fallback
+  var dragging = false, px = 0, py = 0, yaw = 0, pitch = 0;
+  canvas.addEventListener('pointerdown', function(e) { dragging = true; px = e.clientX; py = e.clientY; });
+  window.addEventListener('pointerup',   function()  { dragging = false; });
+  canvas.addEventListener('pointermove', function(e) {
+    if (!dragging || gyroActive) return;
+    yaw   -= (e.clientX - px) * 0.003;
+    pitch -= (e.clientY - py) * 0.003;
+    pitch  = Math.max(-Math.PI/2, Math.min(Math.PI/2, pitch));
+    px = e.clientX; py = e.clientY;
+    var qY = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0), yaw);
+    var qX = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0), pitch);
+    camera.quaternion.multiplyQuaternions(qY, qX);
   });
 
-  // ── Controls ──
-  document.getElementById('btn-speed').addEventListener('click', function () {
-    si = (si + 1) % speeds.length;
-    this.textContent = `속도 ${speeds[si]}`;
-    if (marqueeEntity) marqueeEntity.setAttribute('marquee-sign', 'speed', speeds[si]);
+  window.addEventListener('resize', function() {
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
   });
 
-  document.getElementById('btn-size').addEventListener('click', function () {
-    szi = (szi + 1) % sizes.length;
-    this.textContent = `크기 ${sizes[szi].l}`;
-    if (marqueeEntity) {
-      marqueeEntity.setAttribute('marquee-sign', 'width',  sizes[szi].w);
-      marqueeEntity.setAttribute('marquee-sign', 'height', sizes[szi].h);
-    }
-  });
-
-  document.getElementById('ctrl-text').addEventListener('input', e => {
-    const v = e.target.value.trim();
-    if (!v || !marqueeEntity) return;
-    marqueeEntity.setAttribute('marquee-sign', 'text', v + ' ');
-  });
+  var clock = new THREE.Clock();
+  (function animate() {
+    requestAnimationFrame(animate);
+    var t = clock.getElapsedTime();
+    equator.material.opacity = 0.28 + 0.12 * Math.sin(t * 1.4);
+    renderer.render(scene, camera);
+  })();
+}
 </script>
+
 </body>
 </html>
