@@ -4,77 +4,68 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
   <title>Wall Marquee AR</title>
+  <script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
+  <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { width: 100%; height: 100%; overflow: hidden; background: #000; color: #fff;
+    html, body {
+      width: 100%; height: 100%; overflow: hidden; background: #000; color: #fff;
       font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', system-ui, sans-serif;
-      -webkit-font-smoothing: antialiased; }
+      -webkit-font-smoothing: antialiased;
+    }
 
     /* ── Intro ── */
     #intro {
-      position: fixed; inset: 0; z-index: 30;
+      position: fixed; inset: 0; z-index: 50;
       display: flex; flex-direction: column; justify-content: center; align-items: center;
-      padding: 32px 24px; gap: 18px;
+      padding: 32px 24px; gap: 16px;
       background: radial-gradient(ellipse at top, #1a0028 0%, transparent 60%),
                   linear-gradient(180deg, #0a0014, #000);
     }
     #intro h1 {
-      font-size: 32px; font-weight: 800; letter-spacing: -.03em; text-align: center;
-      background: linear-gradient(90deg,#ff2266,#ff8800);
+      font-size: 30px; font-weight: 800; letter-spacing: -.03em; text-align: center;
+      background: linear-gradient(90deg, #ff2266, #ff8800);
       -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
     }
     .sub { font-size: 14px; line-height: 1.65; color: #999; text-align: center; max-width: 300px; }
     #marquee-input {
-      width: 100%; max-width: 320px; padding: 14px 16px;
+      width: 100%; max-width: 320px; padding: 13px 16px;
       background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.15);
-      border-radius: 12px; color: #fff; font-size: 15px; outline: none;
-      transition: border-color .15s;
+      border-radius: 12px; color: #fff; font-size: 15px; outline: none; transition: border-color .15s;
     }
     #marquee-input:focus { border-color: #ff2266; }
     #start-btn {
-      padding: 15px 38px; border: none; border-radius: 999px; cursor: pointer;
-      background: linear-gradient(90deg,#ff2266,#ff8800); color: #fff;
-      font-size: 17px; font-weight: 700; box-shadow: 0 8px 28px rgba(255,34,102,.4);
+      padding: 14px 36px; border: none; border-radius: 999px; cursor: pointer;
+      background: linear-gradient(90deg, #ff2266, #ff8800); color: #fff;
+      font-size: 16px; font-weight: 700; box-shadow: 0 8px 28px rgba(255,34,102,.4);
     }
-    #warning {
-      font-size: 12px; color: #ff8aa8; padding: 12px 16px;
-      border: 1px solid rgba(255,34,102,.3); border-radius: 10px;
-      background: rgba(255,34,102,.05); max-width: 320px; line-height: 1.5; display: none;
+    #marker-link {
+      font-size: 13px; color: #ff8800; text-decoration: underline;
+      cursor: pointer; text-align: center;
     }
+    .step {
+      font-size: 12px; color: #555; text-align: center; max-width: 300px; line-height: 1.7;
+    }
+    .step b { color: #888; }
 
-    /* ── AR view ── */
-    #ar-view { position: fixed; inset: 0; display: none; touch-action: manipulation; }
-    #cam-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-    #gl-canvas { position: absolute; inset: 0; }
-
-    /* status pill */
+    /* ── AR overlay ── */
+    #overlay {
+      position: fixed; inset: 0; z-index: 100; pointer-events: none; display: none;
+    }
     #status {
-      position: fixed; top: max(env(safe-area-inset-top,0px), 12px); left: 50%;
+      position: absolute;
+      top: max(env(safe-area-inset-top, 0px), 12px); left: 50%;
       transform: translateX(-50%); margin-top: 8px; padding: 7px 16px;
-      background: rgba(0,0,0,.6); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+      background: rgba(0,0,0,.65); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
       border: 1px solid rgba(255,255,255,.12); border-radius: 999px;
       font-size: 12px; font-weight: 600; letter-spacing: .02em; white-space: nowrap;
-      pointer-events: none; z-index: 10;
     }
-
-    /* crosshair */
-    #crosshair {
-      position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
-      width: 40px; height: 40px; pointer-events: none; opacity: .5; z-index: 10;
-    }
-    #crosshair::before, #crosshair::after {
-      content: ''; position: absolute; background: rgba(255,255,255,.9);
-    }
-    #crosshair::before { width: 1px; height: 100%; left: 50%; transform: translateX(-50%); }
-    #crosshair::after  { width: 100%; height: 1px; top: 50%;  transform: translateY(-50%); }
-
-    /* controls */
     #controls {
-      position: fixed; bottom: 0; left: 0; right: 0;
-      padding: 12px 14px calc(12px + env(safe-area-inset-bottom,0px));
+      position: absolute; bottom: 0; left: 0; right: 0;
+      padding: 12px 14px calc(12px + env(safe-area-inset-bottom, 0px));
       display: flex; flex-direction: column; gap: 9px;
       background: linear-gradient(to top, rgba(0,0,0,.75) 0%, transparent 100%);
-      z-index: 10;
+      pointer-events: all;
     }
     #ctrl-text {
       width: 100%; padding: 10px 14px;
@@ -88,7 +79,6 @@
       color: #fff; font-size: 13px; font-weight: 600; cursor: pointer;
       -webkit-tap-highlight-color: transparent;
     }
-    .btn.red { background: linear-gradient(90deg,#ff2266,#ff5500); border-color: transparent; }
   </style>
 </head>
 <body>
@@ -96,329 +86,220 @@
 <!-- ── INTRO ── -->
 <div id="intro">
   <h1>Wall Marquee AR</h1>
-  <p class="sub">카메라로 벽을 가리키고 탭하면<br>브로드웨이 전광판 텍스트가 흐릅니다.<br>더블탭으로 제거.</p>
+  <p class="sub">Hiro 마커를 벽에 붙이거나 화면에 띄운 후<br>카메라로 가리키면 전광판이 나타납니다.</p>
   <input id="marquee-input" type="text" placeholder="마키 텍스트 입력..."
          value="★ NOW PLAYING ★ BROADWAY LIVE ★ ">
   <button id="start-btn">카메라 시작</button>
-  <div id="warning"></div>
+  <a id="marker-link"
+     href="https://raw.githack.com/AR-js-org/AR.js/master/data/images/hiro.png"
+     target="_blank" rel="noopener">
+    → Hiro 마커 열기 (출력 또는 화면에 띄우기)
+  </a>
+  <p class="step">
+    <b>① 마커 열기</b> → 다른 기기 화면이나 종이에 띄우기<br>
+    <b>② 카메라 시작</b> → 마커를 카메라 중앙에 맞추기<br>
+    <b>③</b> 마커가 인식되면 전광판이 공간에 고정됨
+  </p>
 </div>
 
-<!-- ── AR VIEW ── -->
-<div id="ar-view">
-  <video id="cam-video" autoplay playsinline muted></video>
-  <canvas id="gl-canvas"></canvas>
-  <div id="status">벽을 가리키고 탭하세요</div>
-  <div id="crosshair"></div>
+<!-- ── AR OVERLAY ── -->
+<div id="overlay">
+  <div id="status">Hiro 마커를 카메라에 보여주세요…</div>
   <div id="controls">
     <input id="ctrl-text" type="text" placeholder="텍스트 변경...">
     <div id="ctrl-btns">
       <button class="btn" id="btn-speed">속도 0.4</button>
       <button class="btn" id="btn-size">크기 M</button>
-      <button class="btn" id="btn-dist">거리 2.5m</button>
-      <button class="btn red" id="btn-clear">전체 제거</button>
     </div>
   </div>
 </div>
 
-<script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js"}}</script>
+<script>
+  // ── Config ──
+  const speeds = [0.2, 0.4, 0.8, 1.5];
+  const sizes  = [
+    { l: 'S', w: 0.8,  h: 0.15 },
+    { l: 'M', w: 1.6,  h: 0.29 },
+    { l: 'L', w: 2.6,  h: 0.47 },
+  ];
+  let si = 1, szi = 1;
+  let marqueeEntity = null;
 
-<script type="module">
-import * as THREE from 'three';
-
-// ── Config tables ──
-const speeds = [0.2, 0.4, 0.8, 1.5];
-const sizes  = [
-  { l:'S', w:1.2, h:0.22 },
-  { l:'M', w:2.4, h:0.44 },
-  { l:'L', w:4.0, h:0.75 },
-];
-const dists  = [1.5, 2.5, 4.0];
-let si = 1, szi = 1, di = 1;
-
-let marqueeText = '★ NOW PLAYING ★ BROADWAY LIVE ★ ';
-let scene, camera, renderer, marqueeTexture;
-const planes  = [];
-let totalTime = 0;
-let lastTap   = 0;
-
-// ── DeviceOrientation helpers (Three.js DeviceOrientationControls approach) ──
-const _q1   = new THREE.Quaternion(-Math.sqrt(.5), 0, 0, Math.sqrt(.5)); // -90° around X
-const _q0   = new THREE.Quaternion();
-const _zee  = new THREE.Vector3(0, 0, 1);
-const _euler = new THREE.Euler();
-
-function applyOrientation(alpha, beta, gamma) {
-  const angle = ((window.screen?.orientation?.angle) ?? (window.orientation ?? 0)) * Math.PI / 180;
-  _euler.set(
-    THREE.MathUtils.degToRad(beta),
-    THREE.MathUtils.degToRad(alpha),
-    THREE.MathUtils.degToRad(-gamma),
-    'YXZ'
-  );
-  camera.quaternion.setFromEuler(_euler);
-  camera.quaternion.multiply(_q1);
-  _q0.setFromAxisAngle(_zee, -angle);
-  camera.quaternion.multiply(_q0);
-}
-
-// ── Build marquee canvas texture ──
-function makeTexture(text) {
-  const W = 2048, H = 256;
-  const cv  = document.createElement('canvas');
-  cv.width  = W; cv.height = H;
-  const ctx = cv.getContext('2d');
-
-  // background
-  ctx.fillStyle = '#070010';
-  ctx.fillRect(0, 0, W, H);
-
-  // subtle scanline
-  ctx.fillStyle = 'rgba(255,34,102,.07)';
-  for (let y = 0; y < H; y += 4) ctx.fillRect(0, y, W, 1);
-
-  // neon glow text, tiled to fill width seamlessly
-  ctx.font          = 'bold 140px -apple-system,"Helvetica Neue",Arial,sans-serif';
-  ctx.textBaseline  = 'middle';
-  ctx.shadowColor   = '#ff0055';
-  ctx.shadowBlur    = 40;
-  ctx.fillStyle     = '#ff3a78';
-
-  const tw = Math.max(ctx.measureText(text).width, 1);
-  const n  = Math.ceil(W / tw) + 2;
-  for (let i = 0; i < n; i++) ctx.fillText(text, i * tw, H / 2);
-
-  const t = new THREE.CanvasTexture(cv);
-  t.wrapS     = THREE.RepeatWrapping;
-  t.wrapT     = THREE.ClampToEdgeWrapping;
-  t.minFilter = THREE.LinearFilter;
-  t.magFilter = THREE.LinearFilter;
-  t.anisotropy = 4;
-  return t;
-}
-
-// ── Shader: horizontal UV scroll ──
-const vert = /* glsl */`
-  varying vec2 vUv;
-  void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }
-`;
-const frag = /* glsl */`
-  uniform sampler2D map;
-  uniform float uOff;
-  uniform float uRep;
-  uniform float uA;
-  varying vec2 vUv;
-  void main(){
-    vec2 uv = vec2(vUv.x * uRep + uOff, vUv.y);
-    vec4 c  = texture2D(map, uv);
-    gl_FragColor = vec4(c.rgb, c.a * uA);
+  function setStatus(t) {
+    document.getElementById('status').textContent = t;
   }
-`;
 
-// ── Place a marquee plane in 3D space ──
-function placeMesh(tapX, tapY) {
-  const ndc = new THREE.Vector2(
-    (tapX / window.innerWidth)  *  2 - 1,
-   -(tapY / window.innerHeight) *  2 + 1
-  );
-
-  const ray = new THREE.Raycaster();
-  ray.setFromCamera(ndc, camera);
-
-  const dist = dists[di];
-  const pos  = ray.ray.at(dist, new THREE.Vector3());
-
-  // Vertical plane facing back toward camera (horizontal component only)
-  const fwd   = ray.ray.direction.clone();
-  const horiz = fwd.clone(); horiz.y = 0; horiz.normalize();
-  const up    = new THREE.Vector3(0, 1, 0);
-  const right = new THREE.Vector3().crossVectors(up, horiz).normalize();
-  const mat4  = new THREE.Matrix4().makeBasis(right, up, horiz.negate());
-
-  const { w, h } = sizes[szi];
-  const geo = new THREE.PlaneGeometry(w, h);
-  const mat = new THREE.ShaderMaterial({
-    uniforms: {
-      map:  { value: marqueeTexture },
-      uOff: { value: 0 },
-      uRep: { value: Math.max(w / 2.5, 0.1) },
-      uA:   { value: 0 },
+  // ── A-Frame component: animated marquee plane ──
+  AFRAME.registerComponent('marquee-sign', {
+    schema: {
+      text:   { type: 'string', default: '★ NOW PLAYING ★ BROADWAY LIVE ★ ' },
+      speed:  { type: 'number', default: 0.4 },
+      width:  { type: 'number', default: 1.6 },
+      height: { type: 'number', default: 0.29 },
     },
-    vertexShader:   vert,
-    fragmentShader: frag,
-    side:        THREE.DoubleSide,
-    transparent: true,
-    depthWrite:  false,
+
+    init() {
+      this.mesh    = null;
+      this.texture = null;
+      this._t      = 0;
+    },
+
+    update(oldData) {
+      const d = this.data;
+      const needsRebuild = !oldData ||
+        d.text !== oldData.text || d.width !== oldData.width || d.height !== oldData.height;
+      if (needsRebuild) this._buildMesh();
+    },
+
+    _buildMesh() {
+      const THREE = AFRAME.THREE;
+      if (this.mesh) {
+        this.el.object3D.remove(this.mesh);
+        this.mesh.geometry.dispose();
+        this.mesh.material.dispose();
+      }
+      if (this.texture) this.texture.dispose();
+
+      const { width, height, text } = this.data;
+
+      // Canvas texture
+      const W = 2048, H = 256;
+      const cv = document.createElement('canvas');
+      cv.width = W; cv.height = H;
+      const ctx = cv.getContext('2d');
+      ctx.fillStyle = '#070010';
+      ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = 'rgba(255,34,102,.07)';
+      for (let y = 0; y < H; y += 4) ctx.fillRect(0, y, W, 1);
+      ctx.font = 'bold 140px -apple-system,"Helvetica Neue",Arial,sans-serif';
+      ctx.textBaseline = 'middle';
+      ctx.shadowColor  = '#ff0055';
+      ctx.shadowBlur   = 40;
+      ctx.fillStyle    = '#ff3a78';
+      const tw = Math.max(ctx.measureText(text).width, 1);
+      const n  = Math.ceil(W / tw) + 2;
+      for (let i = 0; i < n; i++) ctx.fillText(text, i * tw, H / 2);
+
+      this.texture = new THREE.CanvasTexture(cv);
+      this.texture.wrapS     = THREE.RepeatWrapping;
+      this.texture.wrapT     = THREE.ClampToEdgeWrapping;
+      this.texture.minFilter = THREE.LinearFilter;
+      this.texture.magFilter = THREE.LinearFilter;
+      this.texture.anisotropy = 4;
+
+      const geo = new THREE.PlaneGeometry(width, height);
+      const mat = new THREE.ShaderMaterial({
+        uniforms: {
+          map:  { value: this.texture },
+          uOff: { value: 0 },
+          uRep: { value: Math.max(width / 1.6, 0.1) },
+          uA:   { value: 1.0 },
+        },
+        vertexShader: `
+          varying vec2 vUv;
+          void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }
+        `,
+        fragmentShader: `
+          uniform sampler2D map;
+          uniform float uOff, uRep, uA;
+          varying vec2 vUv;
+          void main(){
+            vec4 c = texture2D(map, vec2(vUv.x * uRep + uOff, vUv.y));
+            gl_FragColor = vec4(c.rgb, c.a * uA);
+          }
+        `,
+        side:        THREE.DoubleSide,
+        transparent: true,
+        depthWrite:  false,
+      });
+
+      this.mesh = new THREE.Mesh(geo, mat);
+      this.el.object3D.add(this.mesh);
+    },
+
+    tick(time) {
+      if (this.mesh) {
+        this.mesh.material.uniforms.uOff.value = -(time / 1000) * this.data.speed / 2.5;
+      }
+    },
+
+    remove() {
+      if (this.mesh) {
+        this.el.object3D.remove(this.mesh);
+        this.mesh.geometry.dispose();
+        this.mesh.material.dispose();
+      }
+      if (this.texture) this.texture.dispose();
+    },
   });
 
-  const mesh = new THREE.Mesh(geo, mat);
-  mesh.position.copy(pos);
-  mesh.setRotationFromMatrix(mat4);
-  mesh.frustumCulled = false;
-  scene.add(mesh);
-  planes.push(mesh);
+  // ── Start ──
+  document.getElementById('start-btn').addEventListener('click', () => {
+    const rawText = document.getElementById('marquee-input').value.trim();
+    const text    = (rawText || '★ NOW PLAYING ★ BROADWAY LIVE ★ ') + ' ';
+    document.getElementById('ctrl-text').value = rawText;
 
-  // fade-in
-  let t = 0;
-  const fade = () => {
-    t += 0.07;
-    mat.uniforms.uA.value = Math.min(t, 0.95);
-    if (t < 1) requestAnimationFrame(fade);
-  };
-  fade();
-}
+    // Build A-Frame scene dynamically (avoids camera prompt on page load)
+    const scene = document.createElement('a-scene');
+    scene.setAttribute('arjs', 'sourceType: webcam; debugUIEnabled: false;');
+    scene.setAttribute('renderer', 'logarithmicDepthBuffer: true;');
+    scene.setAttribute('vr-mode-ui', 'enabled: false');
 
-function removeLast() {
-  if (!planes.length) return;
-  const m = planes.pop();
-  scene.remove(m);
-  m.geometry.dispose();
-  m.material.dispose();
-}
+    const marker = document.createElement('a-marker');
+    marker.setAttribute('preset', 'hiro');
+    marker.setAttribute('id', 'hiro-marker');
 
-function clearAll() {
-  for (const m of planes) {
-    scene.remove(m); m.geometry.dispose(); m.material.dispose();
-  }
-  planes.length = 0;
-}
+    marker.addEventListener('markerFound', () =>
+      setStatus('마커 인식됨 — 카메라를 안정적으로 유지하세요'));
+    marker.addEventListener('markerLost', () =>
+      setStatus('Hiro 마커를 카메라에 보여주세요…'));
 
-// ── Render loop ──
-function animate(time) {
-  totalTime = (time || 0) / 1000;
-  const off = -totalTime * speeds[si] / 2.5;
-  for (const m of planes) m.material.uniforms.uOff.value = off;
-  renderer.render(scene, camera);
-}
-
-// ── Status helper ──
-function setStatus(t) {
-  const el = document.getElementById('status');
-  if (el) el.textContent = t;
-}
-
-// ── Start AR session ──
-async function start() {
-  const warn = document.getElementById('warning');
-  warn.style.display = 'none';
-
-  // 1. Rear camera
-  let stream;
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: { ideal: 'environment' },
-        width:  { ideal: 1920 },
-        height: { ideal: 1080 },
-      }
+    // Entity sits flat on the marker surface (rotation -90 aligns XY plane to marker face)
+    const entity = document.createElement('a-entity');
+    entity.setAttribute('id', 'marquee-entity');
+    entity.setAttribute('rotation', '-90 0 0');
+    entity.setAttribute('marquee-sign', {
+      text,
+      speed:  speeds[si],
+      width:  sizes[szi].w,
+      height: sizes[szi].h,
     });
-  } catch (e) {
-    warn.textContent = `카메라 접근 실패: ${e.message}`;
-    warn.style.display = 'block';
-    return;
-  }
 
-  // 2. iOS DeviceOrientation permission (must be called inside user gesture)
-  if (typeof DeviceOrientationEvent !== 'undefined' &&
-      typeof DeviceOrientationEvent.requestPermission === 'function') {
-    try {
-      const r = await DeviceOrientationEvent.requestPermission();
-      if (r !== 'granted') {
-        warn.textContent = '기기 방향 센서 권한 없음 — 탭으로 배치는 가능하나 카메라 회전 추적이 비활성화됩니다.';
-        warn.style.display = 'block';
-      }
-    } catch { /* ignore */ }
-  }
+    marker.appendChild(entity);
 
-  // 3. Copy intro text
-  const introVal = document.getElementById('marquee-input').value.trim();
-  if (introVal) marqueeText = introVal + ' ';
-  document.getElementById('ctrl-text').value = introVal;
+    const cam = document.createElement('a-entity');
+    cam.setAttribute('camera', '');
 
-  // 4. Three.js
-  scene  = new THREE.Scene();
-  camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 100);
-  camera.position.set(0, 1.6, 0);
+    scene.appendChild(marker);
+    scene.appendChild(cam);
+    document.body.appendChild(scene);
 
-  renderer = new THREE.WebGLRenderer({
-    canvas: document.getElementById('gl-canvas'),
-    alpha: true, antialias: true, premultipliedAlpha: false,
+    marqueeEntity = entity;
+    document.getElementById('intro').style.display   = 'none';
+    document.getElementById('overlay').style.display = 'block';
   });
-  renderer.setPixelRatio(window.devicePixelRatio);
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setClearColor(0x000000, 0);
-  renderer.setAnimationLoop(animate);
 
-  marqueeTexture = makeTexture(marqueeText);
+  // ── Controls ──
+  document.getElementById('btn-speed').addEventListener('click', function () {
+    si = (si + 1) % speeds.length;
+    this.textContent = `속도 ${speeds[si]}`;
+    if (marqueeEntity) marqueeEntity.setAttribute('marquee-sign', 'speed', speeds[si]);
+  });
 
-  // 5. Camera feed
-  const vid = document.getElementById('cam-video');
-  vid.srcObject = stream;
-
-  // 6. Show AR view
-  document.getElementById('intro').style.display = 'none';
-  document.getElementById('ar-view').style.display = 'block';
-
-  // 7. Device orientation → camera rotation
-  window.addEventListener('deviceorientation', e => {
-    if (e.alpha == null) return;
-    applyOrientation(e.alpha, e.beta, e.gamma);
-  }, true);
-
-  // 8. Resize
-  const onResize = () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-  };
-  window.addEventListener('resize', onResize);
-  window.addEventListener('orientationchange', onResize);
-
-  // 9. Tap = place, double-tap = remove last
-  document.getElementById('ar-view').addEventListener('pointerdown', e => {
-    if (e.target.closest('#controls')) return;
-    const now = Date.now();
-    if (now - lastTap < 280) {
-      removeLast();
-      setStatus(planes.length ? `마퀴 ${planes.length}개 남음` : '벽을 가리키고 탭하세요');
-    } else {
-      placeMesh(e.clientX, e.clientY);
-      setStatus(`마퀴 ${planes.length}개 배치됨 · 더블탭으로 제거`);
+  document.getElementById('btn-size').addEventListener('click', function () {
+    szi = (szi + 1) % sizes.length;
+    this.textContent = `크기 ${sizes[szi].l}`;
+    if (marqueeEntity) {
+      marqueeEntity.setAttribute('marquee-sign', 'width',  sizes[szi].w);
+      marqueeEntity.setAttribute('marquee-sign', 'height', sizes[szi].h);
     }
-    lastTap = now;
   });
-}
 
-// ── UI bindings ──
-document.getElementById('start-btn').addEventListener('click', start);
-
-document.getElementById('btn-speed').addEventListener('click', function () {
-  si = (si + 1) % speeds.length;
-  this.textContent = `속도 ${speeds[si]}`;
-});
-
-document.getElementById('btn-size').addEventListener('click', function () {
-  szi = (szi + 1) % sizes.length;
-  this.textContent = `크기 ${sizes[szi].l}`;
-});
-
-document.getElementById('btn-dist').addEventListener('click', function () {
-  di = (di + 1) % dists.length;
-  this.textContent = `거리 ${dists[di]}m`;
-});
-
-document.getElementById('btn-clear').addEventListener('click', () => {
-  clearAll();
-  setStatus('전체 제거됨');
-});
-
-document.getElementById('ctrl-text').addEventListener('input', e => {
-  const v = e.target.value.trim();
-  if (!v) return;
-  marqueeText = v + ' ';
-  if (marqueeTexture) marqueeTexture.dispose();
-  marqueeTexture = makeTexture(marqueeText);
-  for (const m of planes) m.material.uniforms.map.value = marqueeTexture;
-});
+  document.getElementById('ctrl-text').addEventListener('input', e => {
+    const v = e.target.value.trim();
+    if (!v || !marqueeEntity) return;
+    marqueeEntity.setAttribute('marquee-sign', 'text', v + ' ');
+  });
 </script>
 </body>
 </html>
